@@ -1,4 +1,3 @@
-from cryptography.fernet import Fernet
 import os, base64
 import random, string
 from flask import Blueprint, request, jsonify
@@ -8,13 +7,7 @@ consultant_bp = Blueprint('consultant', __name__, url_prefix='/api/consultant')
 mysql = MySQL()
 
 # Load key from env or generate (DO NOT generate on every run in production)
-FERNET_KEY = os.getenv("FERNET_KEY")
-if not FERNET_KEY:
-    # generate once and store in env for future use (only for dev)
-    FERNET_KEY = Fernet.generate_key().decode()
-    # print("Save this FERNET_KEY securely:", FERNET_KEY)
 
-fernet = Fernet(FERNET_KEY.encode())
 #=====================Consultant CRUD Operations=====================
 #---------------------Consultant POST -------------------
 @consultant_bp.route('/', methods=['POST'])
