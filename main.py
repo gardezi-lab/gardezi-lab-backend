@@ -9,11 +9,8 @@ from routes.consultant.consultant import consultant_bp
 # Load .env variables
 load_dotenv()
 app = Flask(__name__)
-allowed_origins = [
-    "http://localhost:5173"
-]
 
-CORS(app, resources={r"/*": {"origins": allowed_origins}})
+CORS(app, origins = ["http://localhost:5173"])
 
 # MySQL Config
 try:
