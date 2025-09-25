@@ -9,6 +9,7 @@ mysql = MySQL()
 # Load key from env or generate (DO NOT generate on every run in production)
 
 #=====================Consultant CRUD Operations=====================
+
 #---------------------Consultant POST -------------------
 @consultant_bp.route('/', methods=['POST'])
 def create_consultant_enc():
@@ -23,30 +24,41 @@ def create_consultant_enc():
         if not plain_password:
             plain_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-        # encrypt
+        # Encrypt password
         encrypted = fernet.encrypt(plain_password.encode()).decode()
 
         age = data.get("age")
+        
+        #check agir sary null post ke ja rahy hon to error return ho 
+        if not all([doctor_name, contact_no, hospital, user_name, age]):
+            return jsonify({"error": "All fields except password are required"}), 400
+        
+        if isinstance(doctor_name, int) or isinstance(hospital, int) or isinstance(user_name, int):
+            return jsonify({"message": "doctor name, hospital, or username cannot be number"})
+        if isinstance(age, str):
+            return jsonify({"message": "age cannot be string"})
+
         insert_query = """
             INSERT INTO consultants(doctor_name, contact_no, hospital, user_name, password, password_encrypted, age)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         cursor = mysql.connection.cursor()
-        cursor.execute(insert_query, (doctor_name, contact_no, hospital, user_name,plain_password, encrypted, age))
+        cursor.execute(insert_query, (doctor_name, contact_no, hospital, user_name, plain_password, encrypted, age))
         mysql.connection.commit()
 
         return jsonify({
-            "message": "Consultant created  successfully",
+            "message": "Consultant created successfully",
             "doctor_name": doctor_name,
             "age" : age,
             "contact_no": contact_no,
             "hospital": hospital,
             "user_name": user_name,
-            "password": plain_password   
+            "password": plain_password   # plain only for returning once
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+
 #-------------------Consultant GET --------------------
 @consultant_bp.route('/', methods=['GET'])
 def get_consultants_enc():
@@ -58,7 +70,6 @@ def get_consultants_enc():
         consultants = []
         for row in rows:
             d = dict(zip(column_names, row))
-            # decrypt password (risky) and include plain in response
             try:
                 decrypted = fernet.decrypt(d['password_encrypted'].encode()).decode()
             except Exception:
@@ -69,6 +80,8 @@ def get_consultants_enc():
         return jsonify(consultants), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
 #----------------------Consultant Get by ID -------------------
 @consultant_bp.route('/<int:id>', methods=['GET'])
 def get_consultant_by_id(id):
@@ -80,7 +93,6 @@ def get_consultant_by_id(id):
             return jsonify({"error": "Consultant not found"}), 404
         column_names = [desc[0] for desc in cursor.description]
         d = dict(zip(column_names, row))
-        # decrypt password (risky) and include plain in response
         try:
             decrypted = fernet.decrypt(d['password_encrypted'].encode()).decode()
         except Exception:
@@ -90,6 +102,8 @@ def get_consultant_by_id(id):
         return jsonify(d), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
 #-------------------Consultant Update --------------------
 @consultant_bp.route('/<int:id>', methods=['PUT'])
 def update_consultant_enc(id):
@@ -110,6 +124,7 @@ def update_consultant_enc(id):
             password_value = ()
 
         age = data.get("age")
+        
         update_query = f"""
             UPDATE consultants
             SET doctor_name=%s, contact_no=%s, hospital=%s, user_name=%s, age=%s
@@ -124,6 +139,8 @@ def update_consultant_enc(id):
         return jsonify({"message": "Consultant updated (encrypted) successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
 #-------------------Consultant Delete --------------------
 @consultant_bp.route('/<int:id>', methods=['DELETE'])
 def delete_consultant(id):
@@ -134,6 +151,8 @@ def delete_consultant(id):
         return jsonify({"message": "Consultant deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
 #-------------------Consultant Search by Name --------------------
 @consultant_bp.route('/search/<string:name>', methods=['GET'])  
 def search_consultants(name):
@@ -151,7 +170,6 @@ def search_consultants(name):
         consultants = []
         for row in rows:
             d = dict(zip(column_names, row))
-            # decrypt password (risky) and include plain in response
             try:
                 decrypted = fernet.decrypt(d['password_encrypted'].encode()).decode()
             except Exception:
