@@ -10,7 +10,7 @@ from routes.consultant.consultant import consultant_bp
 load_dotenv()
 app = Flask(__name__)
 
-CORS(app, origins = ["http://localhost:5173"])
+CORS(app)
 
 # MySQL Config
 try:
