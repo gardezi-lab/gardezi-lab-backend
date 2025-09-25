@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from dotenv import load_dotenv
 from flask_mysqldb import MySQL
+from flask_cors import CORS
 import os
 from routes.department.department import department_bp
 from routes.consultant.consultant import consultant_bp
@@ -9,6 +10,7 @@ from routes.consultant.consultant import consultant_bp
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 # MySQL Config
 try:
