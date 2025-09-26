@@ -37,7 +37,7 @@ def create_department():
             return jsonify({"error": "Department name cannot be empty"}), 400
         # Check for duplicate department
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM departments WHERE department=%s", (department,))
+        cursor.execute("SELECT * FROM departments WHERE department_name=%s", (department,))
         existing_department = cursor.fetchone()
         # Check if department is empty
         if existing_department:
@@ -46,7 +46,7 @@ def create_department():
         if isinstance(department, int):
             return jsonify({"error": "Department name cannot be a number"}), 400
         
-        cursor.execute("INSERT INTO departments (department) VALUES (%s)", (department,))
+        cursor.execute("INSERT INTO departments (department_name) VALUES (%s)", (department,))
         mysql.connection.commit()
         cursor.close()
         return jsonify({"message": "Department created successfully"}), 201
@@ -64,11 +64,11 @@ def update_department(id):
             return jsonify({"error": "Department name cannot be a number"}), 400
         #check if department is already exists
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM departments WHERE department=%s", (department,))
+        cursor.execute("SELECT * FROM departments WHERE department_name=%s", (department,))
         existing_department = cursor.fetchone()
         if existing_department:
             return jsonify({"error": "Department already exists"}), 400
-        cursor.execute("UPDATE departments SET department=%s WHERE id=%s", (department, id))
+        cursor.execute("UPDATE departments SET department_name=%s WHERE id=%s", (department, id))
         mysql.connection.commit()
         cursor.close()
         return jsonify({"message": "Department updated successfully"}), 200
