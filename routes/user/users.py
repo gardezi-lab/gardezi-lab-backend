@@ -190,3 +190,27 @@ def datalist_role(role_name):
         return jsonify(roles), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+#----------------------------login api-------------------------#
+@users_bp.route('/login', methods=['POST'])
+def login_user():
+    try:
+        data = request.get_json()
+        user_name = data.get("user_name")
+        password = data.get("password")
+
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM users WHERE user_name = %s AND password = %s", (user_name, password))
+        row = cursor.fetchone()
+        column_names = [desc[0] for desc in cursor.description]  # 👈 get column names
+        cursor.close()
+
+        if not row:
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        # Convert tuple to dictionary
+        user = dict(zip(column_names, row))
+
+        return jsonify({"message": "Login successful", "user": user}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

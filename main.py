@@ -7,6 +7,7 @@ from routes.user.users import users_bp
 from routes.companies_panel.companies_panel import companies_panel_bp
 from routes.role.role import role_bp
 from routes.parameter.parameter import parameter_bp
+from routes.test_profile.test_profile import test_profile_bp
 
 
 # Load .env variables
@@ -66,6 +67,7 @@ app.register_blueprint(users_bp)
 app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
 app.register_blueprint(parameter_bp)
+app.register_blueprint(test_profile_bp)
 
 
 
