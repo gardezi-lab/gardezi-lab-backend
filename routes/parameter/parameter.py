@@ -1,0 +1,166 @@
+from flask import Blueprint, request, jsonify
+from flask_mysqldb import MySQL
+
+parameter_bp = Blueprint('parameter', __name__, url_prefix='/api/parameter')
+mysql = MySQL()
+
+#=====================Parameter Crud operations=====================#   
+#---------------------Get all parameters---------------------#
+@parameter_bp.route('/', methods=['GET'])
+def get_all_parameters():
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameters")
+        results = cur.fetchall()   
+
+        parameters = []                 
+        for result in results:
+            parameters.append({
+                "id": result[0],
+                "parameter_name": result[1],
+                "sub_heading": result[2],
+                "input_type": result[3],
+                "unit": result[4],
+                "noraml_value" : result[5],
+                "default_value" : result[6]
+            })
+        cur.close()
+        return jsonify(parameters), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#---------------------Get parameter by ID---------------------#
+@parameter_bp.route('/<int:parameter_id>', methods=['GET'])
+def get_parameter(parameter_id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
+        parameter = cur.fetchone()
+        cur.close()
+        if parameter:
+            return jsonify({
+                "id": parameter[0],
+                "parameter_name": parameter[1],
+                "sub_heading": parameter[2],
+                "input_type": parameter[3],
+                "unit": parameter[4],
+                "normal_value": parameter[5],
+                "default_value": parameter[6]
+            }), 200
+        else:
+            return jsonify({"error": "Parameter not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#---------------------Create a new parameter---------------------#
+@parameter_bp.route('/', methods=['POST'])
+def create_parameter():
+    try:
+        data = request.get_json()
+        parameter_name = data.get("parameter_name")
+        sub_heading = data.get("sub_heading")
+        input_type = data.get("input_type")
+        unit = data.get("unit")
+        normalvalue = data.get("normalvalue")
+        default_value = data.get("default_value")
+
+        #all feilds are mandatory
+        if not parameter_name or not sub_heading or not input_type or not unit or not normalvalue or not default_value:
+            return jsonify({"error": "All fields are required"}), 400
+        
+        #parameter name and value are mandatory in string format
+        if not isinstance(parameter_name, str) or not isinstance(sub_heading, str) or not isinstance(input_type, str) or not isinstance(unit, str) or not isinstance(normalvalue, str) or not isinstance(default_value, str):
+            return jsonify({"error": "All fields must be strings"}), 400
+
+        cur = mysql.connection.cursor()
+        cur.execute("INSERT INTO parameters (parameter_name, sub_heading, input_type, unit, normalvalue, default_value) VALUES (%s, %s, %s, %s, %s, %s)", (parameter_name, sub_heading, input_type, unit, normalvalue, default_value))
+        mysql.connection.commit()
+        cur.close()
+        return jsonify({"message": "Parameter created successfully"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#---------------------Update an existing parameter---------------------#
+@parameter_bp.route('/<int:parameter_id>', methods=['PUT'])
+def update_parameter(parameter_id):
+    try:
+        data = request.get_json()
+
+        # Extract fields from JSON
+        parameter_name = data.get("parameter_name")
+        sub_heading = data.get("sub_heading")
+        input_type = data.get("input_type")
+        unit = data.get("unit")
+        # support both "normal_value" and "normalvalue"
+        normal_value = data.get("normal_value") or data.get("normalvalue")
+        default_value = data.get("default_value")
+
+        # ✅ Check if all fields are provided
+        if not all([parameter_name, sub_heading, input_type, unit, normal_value, default_value]):
+            return jsonify({"error": "All fields are required"}), 400
+
+        #  Check that all fields are strings
+        fields = [parameter_name, sub_heading, input_type, unit, normal_value, default_value]
+        if not all(isinstance(f, str) for f in fields):
+            return jsonify({"error": "All fields must be strings"}), 400
+
+        #  Update in DB
+        cur = mysql.connection.cursor()
+        cur.execute("""
+            UPDATE parameters 
+            SET parameter_name = %s, sub_heading = %s, input_type = %s, unit = %s, normalvalue = %s, default_value = %s 
+            WHERE id = %s
+        """, (parameter_name, sub_heading, input_type, unit, normal_value, default_value, parameter_id))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Parameter updated successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+#---------------------Delete a parameter---------------------#
+@parameter_bp.route('/<int:parameter_id>', methods=['DELETE'])
+def delete_parameter(parameter_id):
+    try:
+        cur = mysql.connection.cursor()
+        #check if the id exists
+        cur.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Parameter not found"}), 404
+         # If exists, delete the record
+         
+        cur.execute("DELETE FROM parameters WHERE id = %s", (parameter_id,))
+        mysql.connection.commit()
+        cur.close()
+        return jsonify({"message": "Parameter deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    #-------------------parameter search by parameter name --------------------
+@parameter_bp.route('/search/<string:parameter_name>', methods=['GET'])
+def search_parameter(parameter_name):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameters WHERE parameter_name LIKE %s", ('%' + parameter_name + '%',))
+        results = cur.fetchall()
+
+        # ✅ Agar koi result nahi mila to not found ka response bhejo
+        if not results:
+            cur.close()
+            return jsonify({"message": "Parameter not found"}), 404
+
+        parameters = []
+        for result in results:
+            parameters.append({
+                "id": result[0],
+                "parameter_name": result[1],
+                "sub_heading": result[2],
+                "input_type": result[3],
+                "unit": result[4],
+                "normal_value": result[5],
+                "default_value": result[6]
+            })
+        cur.close()
+        return jsonify(parameters), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    
