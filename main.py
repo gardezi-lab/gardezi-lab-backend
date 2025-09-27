@@ -3,7 +3,11 @@ from dotenv import load_dotenv
 from flask_mysqldb import MySQL
 import os
 from routes.department.department import department_bp
-from routes.consultant.consultant import consultant_bp
+from routes.user.users import users_bp 
+from routes.companies_panel.companies_panel import companies_panel_bp
+from routes.role.role import role_bp
+from routes.parameter.parameter import parameter_bp
+
 
 # Load .env variables
 load_dotenv()
@@ -58,7 +62,13 @@ def first():
 
 # Register Blueprints
 app.register_blueprint(department_bp)
-app.register_blueprint(consultant_bp)
+app.register_blueprint(users_bp)
+app.register_blueprint(companies_panel_bp)
+app.register_blueprint(role_bp)
+app.register_blueprint(parameter_bp)
+
+
+
 
 
 if __name__ == "__main__":
