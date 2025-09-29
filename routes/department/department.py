@@ -32,21 +32,21 @@ def create_department():
         if not data:
             return jsonify({"error": "Invalid or missing JSON body"}), 400
 
-        department = data.get('department_name')
-        if department == "":
+        department_name = data.get('department_name')
+        if department_name == "":
             return jsonify({"error": "Department name cannot be empty"}), 400
         # Check for duplicate department
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM departments WHERE department_name=%s", (department,))
+        cursor.execute("SELECT * FROM departments WHERE department_name=%s", (department_name,))
         existing_department = cursor.fetchone()
         # Check if department is empty
         if existing_department:
             return jsonify({"error": "Department already exists"}), 400
         #check if department is a number
-        if isinstance(department, int):
+        if isinstance(department_name, int):
             return jsonify({"error": "Department name cannot be a number"}), 400
-        
-        cursor.execute("INSERT INTO departments (department_name) VALUES (%s)", (department,))
+
+        cursor.execute("INSERT INTO departments (department_name) VALUES (%s)", (department_name,))
         mysql.connection.commit()
         cursor.close()
         return jsonify({"message": "Department created successfully"}), 201
@@ -106,7 +106,7 @@ def get_department_by_id(id):
         if result:
             department = {
                 "id": result[0],
-                "department": result[1]
+                "department_name": result[1]
             }
             return jsonify(department), 200
         else:
@@ -120,9 +120,9 @@ def search_departments(name):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT id, department FROM departments WHERE department LIKE %s", ('%' + name + '%',))
+        cursor.execute("SELECT id, department_name FROM departments WHERE department_name LIKE %s", ('%' + name + '%',))
         
-        result = cursor.fetchone()  # fetchall ke bajaye fetchone use karein
+        result = cursor.fetchone()  
         
         if not result:
             return jsonify({"message": "No departments found"}), 404
