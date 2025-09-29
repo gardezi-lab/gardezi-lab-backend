@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 
-packages_bp = Blueprint('packages_bp', __name__)
-
+packages_bp = Blueprint('packages_bp', __name__, url_prefix='/api/test-packages')
 
 
 
