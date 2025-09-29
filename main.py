@@ -17,6 +17,8 @@ from routes.role.role import role_bp
 from routes.parameter.parameter import parameter_bp
 from routes.test_profile.test_profile import test_profile_bp
 
+from routes.account_book.account import account_bp
+
 
 # Load .env variables
 load_dotenv()
@@ -78,6 +80,7 @@ app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
 app.register_blueprint(test_profile_bp)
 
+app.register_blueprint(account_bp)
 
 # ---------- Run App ----------
 if __name__ == "__main__":
