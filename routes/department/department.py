@@ -3,6 +3,7 @@ from flask_mysqldb import MySQL
 
 department_bp = Blueprint('department', __name__, url_prefix='/api/department')
 
+
 mysql = MySQL()
 
 #----------------Department GET -------------------
@@ -125,7 +126,7 @@ def search_departments(name):
         result = cursor.fetchone()  
         
         if not result:
-            return jsonify({"message": "No departments found"}), 404
+            return jsonify({"message": "NO departments found"}), 404
 
         return jsonify({
             "id": result[0],
