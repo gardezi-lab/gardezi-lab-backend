@@ -2,7 +2,15 @@ from flask import Flask, jsonify, request, make_response
 from dotenv import load_dotenv
 from flask_mysqldb import MySQL
 import os
+
+# Import blueprints (only once)
 from routes.department.department import department_bp
+from routes.consultant.consultant import consultant_bp
+from routes.parameter.parameter import parameter_bp
+from routes.interpretations.interpretations import interpretation_bp
+from routes.testpackage.testpackage import packages_bp
+
+
 from routes.user.users import users_bp 
 from routes.companies_panel.companies_panel import companies_panel_bp
 from routes.role.role import role_bp
@@ -33,17 +41,14 @@ except Exception as e:
 
 
 # ---------- Manual CORS (Werkzeug / Flask) ----------
-# Add CORS headers to every response
 @app.after_request
 def add_cors_headers(response):
-    # For dev you can keep '*' or replace with specific origin like 'http://localhost:3000'
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
 
-# Respond to preflight OPTIONS early
 @app.before_request
 def handle_preflight():
     if request.method == 'OPTIONS':
@@ -56,13 +61,18 @@ def handle_preflight():
         return resp
 
 
+# Root test route
 @app.route("/")
 def first():
     return jsonify({"message": "Gardezi Lab Backend Api"})
 
 
-# Register Blueprints
+# ---------- Register Blueprints ----------
 app.register_blueprint(department_bp)
+app.register_blueprint(consultant_bp)
+app.register_blueprint(parameter_bp)
+app.register_blueprint(interpretation_bp)
+app.register_blueprint(packages_bp)
 app.register_blueprint(users_bp)
 app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
@@ -73,6 +83,8 @@ app.register_blueprint(test_profile_bp)
 
 
 
+
+# ---------- Run App ----------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Starting Flask on 0.0.0.0:{port}")
