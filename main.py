@@ -20,6 +20,8 @@ from routes.patient_entry.patient_entry import patient_entry_bp
 from routes.authentication.authentication import authentication_bp
 
 
+from routes.account_book.account import account_bp
+
 
 # Load .env variables
 load_dotenv()
@@ -83,13 +85,14 @@ app.register_blueprint(packages_bp)
 app.register_blueprint(users_bp)
 app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
-app.register_blueprint(parameter_bp)
 app.register_blueprint(test_profile_bp)
 app.register_blueprint(patient_entry_bp)
 app.register_blueprint(authentication_bp)
 
 
 
+
+app.register_blueprint(account_bp)
 
 # ---------- Run App ----------
 if __name__ == "__main__":
