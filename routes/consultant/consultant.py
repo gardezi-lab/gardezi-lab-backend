@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify
 from flask_mysqldb import MySQL
 
 consultant_bp = Blueprint('consultant', __name__, url_prefix='/api/consultant')
+
 mysql = MySQL()
 
 # Load key from env or generate (DO NOT generate on every run in production)
