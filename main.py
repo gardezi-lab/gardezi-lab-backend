@@ -76,12 +76,7 @@ app.register_blueprint(packages_bp)
 app.register_blueprint(users_bp)
 app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
-app.register_blueprint(parameter_bp)
 app.register_blueprint(test_profile_bp)
-
-
-
-
 
 
 # ---------- Run App ----------
