@@ -33,6 +33,7 @@ app.url_map.strict_slashes = False
 # Set secret key from .env
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['TOKEN_EXPIRY_HOURS'] = int(os.getenv("TOKEN_EXPIRY_HOURS", 2))  # default 2 hours
+
 #  Blacklist set
 app.blacklisted_tokens = set()
 # ---------- MySQL Config ----------
@@ -47,7 +48,7 @@ try:
     app.mysql = mysql
     print(" MySQL config loaded successfully:", app.config['MYSQL_HOST'], app.config['MYSQL_DB'])
 except Exception as e:
-    print("❌ MySQL config failed:", str(e))
+    print("MySQL config failed:", str(e))
 
 
 # ---------- Manual CORS (Werkzeug / Flask) ----------
@@ -72,7 +73,7 @@ def handle_preflight():
 
 
 # Root test route
-@app.route("/")
+@app.route("/api")
 def first():
     return jsonify({"message": "Gardezi Lab Backend Api"})
 
