@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_mysqldb import MySQL
+from utils.pagination import paginate_query
 
 test_profile_bp = Blueprint('test_profile', __name__, url_prefix='/api/test_profile')
 mysql = MySQL()
@@ -11,11 +12,9 @@ mysql = MySQL()
 def get_all_test_profiles():
     try:
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM test_profiles")
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        test_profiles = [dict(zip(column_names, row)) for row in rows]
-        return jsonify(test_profiles), 200
+        base_query = "SELECT * FROM test_profiles"
+        return jsonify(paginate_query(cursor, base_query))
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #---------------------Get test&profile by ID---------------------#

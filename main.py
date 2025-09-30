@@ -6,7 +6,7 @@ import os
 # Import blueprints (only once)
 from routes.department.department import department_bp
 from routes.consultant.consultant import consultant_bp
-from routes.parameter.parameter import parameter_bp
+#from routes.parameter.parameter import parameter_bp
 from routes.interpretations.interpretations import interpretation_bp
 from routes.testpackage.testpackage import packages_bp
 
@@ -16,6 +16,9 @@ from routes.companies_panel.companies_panel import companies_panel_bp
 from routes.role.role import role_bp
 from routes.parameter.parameter import parameter_bp
 from routes.test_profile.test_profile import test_profile_bp
+from routes.patient_entry.patient_entry import patient_entry_bp
+from routes.authentication.authentication import authentication_bp
+
 
 from routes.account_book.account import account_bp
 
@@ -27,6 +30,11 @@ app = Flask(__name__)
 # Accept both with / without trailing slash (prevents 308 redirects)
 app.url_map.strict_slashes = False
 
+# Set secret key from .env
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['TOKEN_EXPIRY_HOURS'] = int(os.getenv("TOKEN_EXPIRY_HOURS", 2))  # default 2 hours
+#  Blacklist set
+app.blacklisted_tokens = set()
 # ---------- MySQL Config ----------
 try:
     app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST', '127.0.0.1')
@@ -37,7 +45,7 @@ try:
 
     mysql = MySQL(app)
     app.mysql = mysql
-    print("✅ MySQL config loaded successfully:", app.config['MYSQL_HOST'], app.config['MYSQL_DB'])
+    print(" MySQL config loaded successfully:", app.config['MYSQL_HOST'], app.config['MYSQL_DB'])
 except Exception as e:
     print("❌ MySQL config failed:", str(e))
 
@@ -79,11 +87,16 @@ app.register_blueprint(users_bp)
 app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
 app.register_blueprint(test_profile_bp)
+app.register_blueprint(patient_entry_bp)
+app.register_blueprint(authentication_bp)
+
+
+
 
 app.register_blueprint(account_bp)
 
 # ---------- Run App ----------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Starting Flask on 0.0.0.0:{port}")
+    print(f" Starting Flask on 0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=True)
