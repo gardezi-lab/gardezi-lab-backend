@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
+from utils.pagination import paginate_query
 
 
 companies_panel_bp = Blueprint('companies_panel', __name__, url_prefix='/api/companies_panel')
@@ -12,22 +13,11 @@ def get_companies_panels():
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM companies_panel")
-        result = cursor.fetchall()
-        #convert result to json
-        companies_panels = []
-        for row in result:
-            companies_panels.append({
-                "id": row[0],
-                "company_name": row[1],
-                "head_name": row[2],
-                "contact_no": row[3],
-                "user_name": row[4],
-                "age": row[5]
-            })
-        return jsonify(companies_panels), 200
-    except Exception as e:   
+        base_query = "SELECT * FROM companies_panel"
+        return jsonify(paginate_query(cursor, base_query)), 200
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 #---------------------Companies Panel Create  With validation -------------------
 @companies_panel_bp.route('/', methods=['POST'])
 def create_companies_panel():

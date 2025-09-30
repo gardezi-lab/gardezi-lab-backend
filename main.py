@@ -29,6 +29,7 @@ app = Flask(__name__)
 
 # Accept both with / without trailing slash (prevents 308 redirects)
 app.url_map.strict_slashes = False
+
 # Set secret key from .env
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['TOKEN_EXPIRY_HOURS'] = int(os.getenv("TOKEN_EXPIRY_HOURS", 2))  # default 2 hours
@@ -79,7 +80,7 @@ def first():
 # ---------- Register Blueprints ----------
 app.register_blueprint(department_bp)
 app.register_blueprint(consultant_bp)
-#app.register_blueprint(parameter_bp)
+app.register_blueprint(parameter_bp)
 app.register_blueprint(interpretation_bp)
 app.register_blueprint(packages_bp)
 app.register_blueprint(users_bp)

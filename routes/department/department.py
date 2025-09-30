@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
+from utils.pagination import paginate_query
 
 department_bp = Blueprint('department', __name__, url_prefix='/api/department')
 
@@ -12,19 +13,10 @@ def get_departments():
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM departments")
-        result = cursor.fetchall()
-        #convert result to json
-        departments = []
-        for row in result:
-            departments.append({
-                "department_id": row[0],
-                "department_name": row[1]
-            })
-        return jsonify(departments), 200
-    except Exception as e:   
+        base_query = "SELECT * FROM departments"
+        return jsonify(paginate_query(cursor, base_query)), 200
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 #----------------Department Create -------------------
 @department_bp.route('/', methods=['POST'])
 def create_department():

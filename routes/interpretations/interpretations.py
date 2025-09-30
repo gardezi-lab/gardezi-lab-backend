@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor   
+from utils.pagination import paginate_query
 
 # Blueprint with API prefix
 interpretation_bp = Blueprint("interpretations", __name__, url_prefix="/api/interpretations")
@@ -39,11 +40,9 @@ def create_interpretation():
 @interpretation_bp.route("/", methods=["GET"])
 def get_interpretations():
     mysql = current_app.mysql
-    cur = mysql.connection.cursor(DictCursor)   
-    cur.execute("SELECT * FROM interpretations")
-    rows = cur.fetchall()
-    cur.close()
-    return jsonify(rows)
+    cur = mysql.connection.cursor(DictCursor)
+    base_query = "SELECT * FROM interpretations"
+    return jsonify(paginate_query(cur, base_query)), 200
 
 # -------- UPDATE --------
 @interpretation_bp.route("/<int:id>", methods=["PUT"])

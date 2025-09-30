@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
+from utils.pagination import paginate_query
 
 packages_bp = Blueprint('packages_bp', __name__, url_prefix='/api/test-packages')
 
@@ -55,20 +56,9 @@ def get_packages():
 
     mysql = current_app.mysql
     cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM test_packages")
-    rows = cur.fetchall()
-    cur.close()
-
-    result = []
-    for row in rows:
-        result.append({
-            "id": row[0],
-            "name": row[1],
-            "price": float(row[2]),
-            "selected_test": row[3]
-        })
-    return jsonify(result)
-
+    
+    base_query = "SELECT * FROM test_packages"
+    return jsonify(paginate_query(cur, base_query))
 
 # -------- READ ONE (GET by id) --------
 @packages_bp.route('/<int:id>', methods=['GET'])
