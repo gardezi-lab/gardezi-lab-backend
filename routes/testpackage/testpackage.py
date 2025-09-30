@@ -1,8 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from utils.pagination import paginate_query
 
-packages_bp = Blueprint('packages_bp', __name__)
-
+packages_bp = Blueprint('packages_bp', __name__, url_prefix='/api/test-packages')
 
 
 
@@ -27,8 +26,9 @@ def validate_package_data(data, is_update=False):
 
 
 # -------- CREATE (POST) --------
-@packages_bp.route('/packages', methods=['POST'])
+@packages_bp.route('/', methods=['POST'])
 def create_package():
+
     mysql = current_app.mysql
     data = request.get_json()
 
@@ -51,8 +51,9 @@ def create_package():
 
 
 # -------- READ ALL (GET) --------
-@packages_bp.route('/packages', methods=['GET'])
+@packages_bp.route('/', methods=['GET'])
 def get_packages():
+
     mysql = current_app.mysql
     cur = mysql.connection.cursor()
     
@@ -60,8 +61,9 @@ def get_packages():
     return jsonify(paginate_query(cur, base_query))
 
 # -------- READ ONE (GET by id) --------
-@packages_bp.route('/packages/<int:id>', methods=['GET'])
+@packages_bp.route('/<int:id>', methods=['GET'])
 def get_package(id):
+
     mysql = current_app.mysql
     cur = mysql.connection.cursor()
     cur.execute("SELECT * FROM test_packages WHERE id=%s", (id,))
@@ -79,8 +81,9 @@ def get_package(id):
 
 
 # -------- UPDATE (PUT) --------
-@packages_bp.route('/packages/<int:id>', methods=['PUT'])
+@packages_bp.route('/<int:id>', methods=['PUT'])
 def update_package(id):
+
     mysql = current_app.mysql
     data = request.get_json()
 
@@ -105,8 +108,9 @@ def update_package(id):
 
 
 # -------- DELETE (DELETE) --------
-@packages_bp.route('/packages/<int:id>', methods=['DELETE'])
+@packages_bp.route('/<int:id>', methods=['DELETE'])
 def delete_package(id):
+    
     mysql = current_app.mysql
     cur = mysql.connection.cursor()
     cur.execute("DELETE FROM test_packages WHERE id=%s", (id,))
