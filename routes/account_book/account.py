@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
 
 account_bp = Blueprint('account', __name__, url_prefix='/api/account')
@@ -6,11 +6,125 @@ mysql = MySQL()
 
 
 @account_bp.route('/', methods=['GET'])
-def get_roles():
+def get_accountheads():
     try:
-        account = "Hello From Account Get Api"                 
-        return jsonify(account), 200
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads")
+        result = cursor.fetchall()
+        #convert result to json
+        accountheads = []
+        for row in result:
+            accountheads.append({
+                "head_name": row[0],
+                "head_code": row[1],
+                "ob": row[2],
+                "ob_date": row[3],
+                "parent_account": row[4],
+                "created_at": row[5]
+            })
+        return jsonify(accountheads), 200
+    except Exception as e:   
+        return jsonify({"error": str(e)}), 500
+
+@account_bp.route('/', methods=['POST'])
+def create_accounthead():
+    try:
+        data = request.get_json(force=False)
+        if not data:
+            return jsonify({"error": "Invalid or missing JSON body"}), 400
+
+        head = data.get('name_head')
+        head_code = data.get('head_code')
+        ob = data.get('ob')
+        ob_date = data.get('ob_date')
+        parent_account = data.get('parent_account')
+        if head == "":
+            return jsonify({"error": "Head name cannot be empty"}), 400
+        # Check for duplicate department
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads WHERE name_head=%s", (head,))
+        existing_department = cursor.fetchone()
+        # Check if department is empty
+        if existing_department:
+            return jsonify({"error": "Head Name already exists"}), 400
+        #check if department is a number
+        if isinstance(head, int):
+            return jsonify({"error": "Head Name name cannot be a number"}), 400
+        
+        cursor.execute("INSERT INTO account_heads (name_head, head_code, ob, ob_date, parent_account) VALUES (%s, %s, %s, %s, %s)", (head, head_code, ob, ob_date, parent_account,))
+        mysql.connection.commit()
+        cursor.close()
+        return jsonify({"message": "Account Head created successfully"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@account_bp.route('/<int:id>', methods=['GET'])
+def get_account_by_id(id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        cursor.close()
+        if result:
+            department = {
+                "id": result[0],
+                "name_head": result[1]
+            }
+            return jsonify(department), 200
+        else:
+            return jsonify({"message": "Head Name not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@account_bp.route('/<int:id>', methods=['DELETE'])
+def delete_head(id): 
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": "Head not found"}), 404
+        cursor = mysql.connection.cursor()
+        cursor.execute("DELETE FROM account_heads WHERE id=%s", (id,))
+        mysql.connection.commit()
+        cursor.close()
+        return jsonify({"message": "Head deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@account_bp.route('/<int:id>', methods=['PUT'])
+def update_account_head(id):
+    try:
+        data = request.get_json()
+        name_head = data.get("name_head")
+        head_code = data.get("head_code")
+        ob = data.get("ob")
+        ob_date = data.get("ob_date")
+        parent_account = data.get("parent_account")
+        
+        if not isinstance(name_head, str) or not isinstance(head_code, str) :
+            return jsonify({"error": "All fields must be strings"}), 400
+
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads WHERE id = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Head not found"}), 404
+
+        update_query = """UPDATE account_heads 
+                          SET name_head = %s, head_code = %s, ob = %s, ob_date = %s, parent_account = %s WHERE id = %s"""
+        cursor.execute(update_query, (name_head, head_code, ob, ob_date, parent_account,  id))
+        mysql.connection.commit()
+        cursor.close()
+        return jsonify({"message": "Head updated successfully",
+                        "name_head": name_head,
+                        "head_code": head_code,
+                        "ob": ob,
+                        "ob_date": ob_date,
+                        "parent_account": parent_account
+                        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500    
