@@ -1,5 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify,current_app
 from flask_mysqldb import MySQL
+from utils.pagination import paginate_query
 
 parameter_bp = Blueprint('parameter', __name__, url_prefix='/api/parameter')
 mysql = MySQL()
@@ -10,24 +11,11 @@ mysql = MySQL()
 def get_all_parameters():
     try:
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM parameters")
-        results = cur.fetchall()   
-
-        parameters = []                 
-        for result in results:
-            parameters.append({
-                "id": result[0],
-                "parameter_name": result[1],
-                "sub_heading": result[2],
-                "input_type": result[3],
-                "unit": result[4],
-                "noraml_value" : result[5],
-                "default_value" : result[6]
-            })
-        cur.close()
-        return jsonify(parameters), 200
+        base_query = "SELECT * FROM parameters"
+        return jsonify(paginate_query(cur, base_query)), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 #---------------------Get parameter by ID---------------------#
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
 def get_parameter(parameter_id):

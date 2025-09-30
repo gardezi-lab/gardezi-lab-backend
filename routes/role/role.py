@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_mysqldb import MySQL
+from utils.pagination import paginate_query
 
 role_bp = Blueprint('role', __name__, url_prefix='/api/role')
 mysql = MySQL()
@@ -10,17 +11,8 @@ mysql = MySQL()
 def get_roles():
     try:
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM roles")
-        results = cur.fetchall()   
-
-        roles = []                 
-        for result in results:
-            roles.append({
-                "id": result[0],
-                "role_name": result[1]
-            })
-        cur.close()
-        return jsonify(roles), 200
+        base_query = "SELECT * FROM roles"
+        return jsonify(paginate_query(cur,base_query))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

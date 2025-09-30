@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, Blueprint, current_app
 from flask_mysqldb import MySQL
-
+from utils.pagination import paginate_query
 
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
@@ -98,30 +98,8 @@ def get_all_patient_entries():
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM patient_entry")
-        rows = cursor.fetchall()
-        cursor.close()
-        patient_entries = []
-        for row in rows:
-            patient_entry = {
-                "id": row[0],
-                "cell": row[1],
-                "patient_name": row[2],
-                "father_hasband_MR": row[3],
-                "age": row[4],
-                "company": row[5],
-                "reffered_by": row[6],
-                "gender": row[7],
-                "email": row[8],
-                "address": row[9],
-                "package": row[10],
-                "sample": row[11],
-                "priority": row[12],
-                "remarks": row[13],
-                "test": row[14]
-            }
-            patient_entries.append(patient_entry)
-        return jsonify({"patient_entries": patient_entries}), 200
+        base_query = "SELECT * FROM patient_entry"
+        return jsonify(paginate_query(cursor, base_query))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #------------------- Get Patient Entry by ID ------------------#

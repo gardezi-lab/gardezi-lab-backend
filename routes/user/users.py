@@ -3,6 +3,8 @@ from flask import Blueprint, request, jsonify,current_app
 from flask_mysqldb import MySQL
 import jwt
 import datetime
+from utils.pagination import paginate_query
+
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 mysql = MySQL()
@@ -67,15 +69,9 @@ def create_user():
 def get_users():
     try:
         cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT id, name, contact_no, user_name, password, age, role
-            FROM users
-        """)
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        users = [dict(zip(column_names, row)) for row in rows]
-        return jsonify(users), 200
-
+        
+        base_query = 'SELECT * FROM users'
+        return jsonify(paginate_query(cursor, base_query))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
