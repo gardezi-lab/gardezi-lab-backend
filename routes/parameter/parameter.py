@@ -12,7 +12,10 @@ def get_all_parameters():
     try:
         cur = mysql.connection.cursor()
         base_query = "SELECT * FROM parameters"
-        return jsonify(paginate_query(cur, base_query)), 200
+        return jsonify({
+            "data" : paginate_query(cur, base_query),
+            "status" : 200 
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -32,7 +35,10 @@ def get_parameter(parameter_id):
                 "input_type": parameter[3],
                 "unit": parameter[4],
                 "normal_value": parameter[5],
-                "default_value": parameter[6]
+                "default_value": parameter[6],
+                "status" : 200
+                
+                
             }), 200
         else:
             return jsonify({"error": "Parameter not found"}), 404
@@ -62,7 +68,8 @@ def create_parameter():
         cur.execute("INSERT INTO parameters (parameter_name, sub_heading, input_type, unit, normalvalue, default_value) VALUES (%s, %s, %s, %s, %s, %s)", (parameter_name, sub_heading, input_type, unit, normalvalue, default_value))
         mysql.connection.commit()
         cur.close()
-        return jsonify({"message": "Parameter created successfully"}), 201
+        return jsonify({"message": "Parameter created successfully",
+                        "status" : 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #---------------------Update an existing parameter---------------------#
@@ -80,7 +87,7 @@ def update_parameter(parameter_id):
         normal_value = data.get("normal_value") or data.get("normalvalue")
         default_value = data.get("default_value")
 
-        # ✅ Check if all fields are provided
+        # Check if all fields are provided
         if not all([parameter_name, sub_heading, input_type, unit, normal_value, default_value]):
             return jsonify({"error": "All fields are required"}), 400
 
@@ -99,7 +106,8 @@ def update_parameter(parameter_id):
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Parameter updated successfully"}), 200
+        return jsonify({"message": "Parameter updated successfully",
+                        "status" : 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -119,7 +127,8 @@ def delete_parameter(parameter_id):
         cur.execute("DELETE FROM parameters WHERE id = %s", (parameter_id,))
         mysql.connection.commit()
         cur.close()
-        return jsonify({"message": "Parameter deleted successfully"}), 200
+        return jsonify({"message": "Parameter deleted successfully",
+                        "status":200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     #-------------------parameter search by parameter name --------------------
@@ -130,7 +139,7 @@ def search_parameter(parameter_name):
         cur.execute("SELECT * FROM parameters WHERE parameter_name LIKE %s", ('%' + parameter_name + '%',))
         results = cur.fetchall()
 
-        # ✅ Agar koi result nahi mila to not found ka response bhejo
+        # Agar koi result nahi mila to not found ka response bhejo
         if not results:
             cur.close()
             return jsonify({"message": "Parameter not found"}), 404
@@ -144,7 +153,9 @@ def search_parameter(parameter_name):
                 "input_type": result[3],
                 "unit": result[4],
                 "normal_value": result[5],
-                "default_value": result[6]
+                "default_value": result[6],
+                "status" : 200
+                
             })
         cur.close()
         return jsonify(parameters), 200

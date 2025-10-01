@@ -64,7 +64,8 @@ def logout_user():
         #  Token ko blacklist mein add kar do
         current_app.blacklisted_tokens.add(token)
 
-        return jsonify({"message": "Logout successful."}), 200
+        return jsonify({"message": "Logout successful.",
+                        "status": 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

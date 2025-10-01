@@ -34,7 +34,8 @@ def create_interpretation():
     mysql.connection.commit()
     cur.close()
 
-    return jsonify({"message": "Interpretation added"}), 201
+    return jsonify({"message": "Interpretation added",
+                    "status": 201}), 201
 
 # -------- READ ALL --------
 @interpretation_bp.route("/", methods=["GET"])
@@ -42,7 +43,9 @@ def get_interpretations():
     mysql = current_app.mysql
     cur = mysql.connection.cursor(DictCursor)
     base_query = "SELECT * FROM interpretations"
-    return jsonify(paginate_query(cur, base_query)), 200
+    return jsonify({
+        "data" : paginate_query(cur, base_query),
+        "status": 200}), 200
 
 # -------- UPDATE --------
 @interpretation_bp.route("/<int:id>", methods=["PUT"])
@@ -62,7 +65,9 @@ def update_interpretation(id):
     mysql.connection.commit()
     cur.close()
 
-    return jsonify({"message": "Interpretation updated"})
+    return jsonify({"message": "Interpretation updated",
+                    "status": 200
+                    })
 
 # -------- DELETE --------
 @interpretation_bp.route("/<int:id>", methods=["DELETE"])
@@ -72,4 +77,6 @@ def delete_interpretation(id):
     cur.execute("DELETE FROM interpretations WHERE id=%s", (id,))
     mysql.connection.commit()
     cur.close()
-    return jsonify({"message": "Interpretation deleted"})
+    return jsonify({"message": "Interpretation deleted",
+                    "status": 200})
+    
