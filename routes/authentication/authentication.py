@@ -42,7 +42,7 @@ def login_user():
         token = jwt.encode({"some": "payload"}, "secret", algorithm="HS256")
 
         return jsonify({
-            "status": 20043,
+            "status": 200,
             "message": "Login successful",
             "token": token,
             "user": user
