@@ -1,28 +1,60 @@
 name: Deploy Flask Backend to Render
 
+# Trigger on push to main, and allow manual runs from UI for debugging
 on:
   push:
     branches:
-      -main
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name : Checkout repository
-        uses : actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Trigger Render Deploy
+      - name: Check branch and file presence (debug)
+        run: |
+          echo "Current branch: $(git rev-parse --abbrev-ref HEAD)"
+          echo "Workflow file exists:"
+          if [ -f .github/workflows/deploy-backend.yml ]; then
+            echo "  OK: .github/workflows/deploy-backend.yml found"
+          else
+            echo "  MISSING: .github/workflows/deploy-backend.yml"
+          fi
+
+      - name: Ensure secrets are set (no secret value printed)
         env:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "🚀 Triggering deploy for Render service: $RENDER_SERVICE_ID"
-          curl -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+          if [ -z "${RENDER_SERVICE_ID}" ] || [ -z "${RENDER_API_KEY}" ]; then
+            echo "ERROR: One or more Render secrets are missing. Add them in Repo > Settings > Secrets."
+            exit 1
+          fi
+          echo "Secrets appear to be present (not printing values)."
+
+      - name: Trigger Render deploy (curl + check HTTP code)
+        env:
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -o pipefail
+          echo "🚀 Triggering deploy for Render service: ${RENDER_SERVICE_ID}"
+          # call Render API, return body + HTTP code on same output
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"clearCache":true}'
-      
-      
-      
+            -d '{"clearCache":true}')
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          HTTP=$(echo "$RESPONSE" | tail -n1)
+          echo "HTTP status: $HTTP"
+          echo "Response body: $BODY"
+          if [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ]; then
+            echo "✅ Deploy triggered successfully."
+          else
+            echo "❌ Deploy trigger failed (HTTP $HTTP). Exiting with non-zero status so Actions shows failure."
+            exit 1
+          fi
