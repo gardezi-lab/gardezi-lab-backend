@@ -1,6 +1,5 @@
 name: Deploy Flask Backend to Render
 
-# Trigger on push to main, and allow manual runs from UI for debugging
 on:
   push:
     branches:
@@ -36,25 +35,13 @@ jobs:
           fi
           echo "Secrets appear to be present (not printing values)."
 
-      - name: Trigger Render deploy (curl + check HTTP code)
+      - name: Trigger Render deploy
         env:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          set -o pipefail
           echo "🚀 Triggering deploy for Render service: ${RENDER_SERVICE_ID}"
-          # call Render API, return body + HTTP code on same output
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+          curl -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{}')
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          HTTP=$(echo "$RESPONSE" | tail -n1)
-          echo "HTTP status: $HTTP"
-          echo "Response body: $BODY"
-          if [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ]; then
-            echo "✅ Deploy triggered successfully."
-          else
-            echo "❌ Deploy trigger failed (HTTP $HTTP). Exiting with non-zero status so Actions shows failure."
-            exit 1
-          fi
+            --data "{}"
