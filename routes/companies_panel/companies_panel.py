@@ -14,7 +14,10 @@ def get_companies_panels():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
         base_query = "SELECT * FROM companies_panel"
-        return jsonify(paginate_query(cursor, base_query)), 200
+        return jsonify({
+            "status" : 200,
+            "data": paginate_query(cursor, base_query)
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -53,7 +56,8 @@ def create_companies_panel():
         cursor.execute("INSERT INTO companies_panel (company_name, head_name, contact_no, user_name, age) VALUES (%s, %s, %s, %s, %s)",
                        (data['company_name'], data['head_name'], data['contact_no'], data['user_name'], data['age']))
         mysql.connection.commit()
-        return jsonify({"message": "Companies panel created successfully"}), 201
+        return jsonify({"message": "Companies panel created successfully",
+                        "status": 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -88,7 +92,9 @@ def update_companies_panel(id):
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
-        return jsonify({"message": "Companies panel updated successfully"}), 200
+        return jsonify({"message": "Companies panel updated successfully",
+                        "status": 200
+                        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -102,7 +108,8 @@ def delete_companies_panel(id):
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
-        return jsonify({"message": "Companies panel deleted successfully"}), 200
+        return jsonify({"message": "Companies panel deleted successfully",
+                        "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #---------------------Companies Panel Get by ID  With validation -------------------
@@ -121,7 +128,8 @@ def get_companies_panel_by_id(id):
             "head_name": result[2],
             "contact_no": result[3],
             "user_name": result[4],
-            "age": result[5]
+            "age": result[5],
+            "status": 200
         }
         return jsonify(companies_panel), 200
     except Exception as e:
@@ -142,21 +150,9 @@ def search_companies_panel_by_head_name(head_name):
                 "head_name": row[2],
                 "contact_no": row[3],
                 "user_name": row[4],
-                "age": row[5]
+                "age": row[5],
+                "status": 200
             })
         return jsonify(companies_panels), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-    
-    
-    
-#------------------------Create the company table creation query for mysql----------------
-# Create Table companies_panel (
-#     id INT AUTO_INCREMENT PRIMARY KEY,
-#     company_name VARCHAR(100) NOT NULL,
-#     head_name VARCHAR(100) NOT NULL,
-#     contact_no VARCHAR(15),
-#     user_name VARCHAR(50),
-#     age INT
-# );

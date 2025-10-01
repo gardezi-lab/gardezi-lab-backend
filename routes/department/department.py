@@ -14,7 +14,9 @@ def get_departments():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
         base_query = "SELECT * FROM departments"
-        return jsonify(paginate_query(cursor, base_query)), 200
+        return jsonify({
+            "data": paginate_query(cursor, base_query),
+            "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #----------------Department Create -------------------
@@ -42,7 +44,8 @@ def create_department():
         cursor.execute("INSERT INTO departments (department_name) VALUES (%s)", (department_name,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Department created successfully"}), 201
+        return jsonify({"message": "Department created successfully",
+                        "status": 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -64,7 +67,8 @@ def update_department(id):
         cursor.execute("UPDATE departments SET department_name=%s WHERE id=%s", (department, id))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Department updated successfully"}), 200
+        return jsonify({"message": "Department updated successfully",
+                        "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -83,7 +87,8 @@ def delete_department(id):
         cursor.execute("DELETE FROM departments WHERE id=%s", (id,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Department deleted successfully"}), 200
+        return jsonify({"message": "Department deleted successfully",
+                        "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -99,7 +104,8 @@ def get_department_by_id(id):
         if result:
             department = {
                 "id": result[0],
-                "department_name": result[1]
+                "department_name": result[1],
+                "status": 200
             }
             return jsonify(department), 200
         else:
@@ -122,7 +128,8 @@ def search_departments(name):
 
         return jsonify({
             "id": result[0],
-            "department": result[1]
+            "department": result[1],
+            "status": 200
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

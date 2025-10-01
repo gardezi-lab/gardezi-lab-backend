@@ -13,7 +13,9 @@ def get_all_test_profiles():
     try:
         cursor = mysql.connection.cursor()
         base_query = "SELECT * FROM test_profiles"
-        return jsonify(paginate_query(cursor, base_query))
+        return jsonify({
+            "data" : paginate_query(cursor, base_query),
+            "status" : 200})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -27,7 +29,9 @@ def get_test_profile(test_profile_id):
         if not row:
             return jsonify({"error": "Test&Profile not found"}), 404
         column_names = [desc[0] for desc in cursor.description]
-        return jsonify(dict(zip(column_names, row))), 200
+        return jsonify({
+            "data": dict(zip(column_names, row)),
+                       "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #---------------------Create a new test&profile---------------------#
@@ -68,7 +72,8 @@ def create_test_profile():
                         "fee": fee,
                         "delivery_time": delivery_time,
                         "serology_elisa": serology_elisa,
-                        "interpretation": interpretation
+                        "interpretation": interpretation,
+                        "status" : 201
                         }), 201
 
     except Exception as e:
@@ -111,7 +116,8 @@ def update_test_profile(test_profile_id):
                         "fee": fee,
                         "delivery_time": delivery_time,
                         "serology_elisa": serology_elisa,
-                        "interpretation": interpretation
+                        "interpretation": interpretation,
+                        "status" : 200
                         }), 200
 
     except Exception as e:
@@ -129,7 +135,8 @@ def delete_test_profile(test_profile_id):
         cursor.execute("DELETE FROM test_profiles WHERE id = %s", (test_profile_id,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Test&Profile deleted successfully"}), 200
+        return jsonify({"message": "Test&Profile deleted successfully",
+                        "status" : 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -146,7 +153,8 @@ def search_test_profile(test_name):
         if not rows:
             return jsonify({"error": "No Test&Profile found"}), 404
 
-        return jsonify({"test_profiles": rows}), 200
+        return jsonify({"test_profiles": rows,
+                        "status": 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -162,6 +170,7 @@ def get_departments():
         column_names = [desc[0] for desc in cursor.description]
         departments = [dict(zip(column_names, row)) for row in rows]
         cursor.close()
-        return jsonify(departments), 200
+        return jsonify({"data" :departments,
+                       "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

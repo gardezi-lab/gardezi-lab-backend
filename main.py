@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response,render_template
 from dotenv import load_dotenv
 from flask_mysqldb import MySQL
 import os
@@ -18,7 +18,7 @@ from routes.parameter.parameter import parameter_bp
 from routes.test_profile.test_profile import test_profile_bp
 from routes.patient_entry.patient_entry import patient_entry_bp
 from routes.authentication.authentication import authentication_bp
-
+from routes.invoice.invoice import invoice_bp
 
 from routes.account_book.account import account_bp
 
@@ -75,7 +75,8 @@ def handle_preflight():
 # Root test route
 @app.route("/api")
 def first():
-    return jsonify({"message": "Gardezi Lab Backend Api"})
+    return render_template("index.html")
+    
 
 
 # ---------- Register Blueprints ----------
@@ -90,7 +91,7 @@ app.register_blueprint(role_bp)
 app.register_blueprint(test_profile_bp)
 app.register_blueprint(patient_entry_bp)
 app.register_blueprint(authentication_bp)
-
+app.register_blueprint(invoice_bp)
 
 
 

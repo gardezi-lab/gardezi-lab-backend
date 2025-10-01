@@ -99,7 +99,9 @@ def get_all_patient_entries():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
         base_query = "SELECT * FROM patient_entry"
-        return jsonify(paginate_query(cursor, base_query))
+        return jsonify({
+            "data" : paginate_query(cursor, base_query),
+            "status" : 200})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #------------------- Get Patient Entry by ID ------------------#
@@ -127,7 +129,8 @@ def patient_get_by_id(id):
                 "sample": row[11],
                 "priority": row[12],
                 "remarks": row[13],
-                "test": row[14]
+                "test": row[14],
+                "status" : 200
             }
             return jsonify({"patient_entry": patient_entry}), 200
         return jsonify({"error": "Patient entry not found"}), 404
@@ -165,7 +168,8 @@ def update_patient_entry(id):
         cursor.execute(update_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test, id))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Patient entry updated successfully"}), 200
+        return jsonify({"message": "Patient entry updated successfully",
+                        "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #------------------- Delete Patient Entry by ID ------------------#
@@ -177,7 +181,8 @@ def delete_patient_entry(id):
         cursor.execute("DELETE FROM patient_entry WHERE id = %s", (id,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Patient entry deleted successfully"}), 200
+        return jsonify({"message": "Patient entry deleted successfully",
+                        "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

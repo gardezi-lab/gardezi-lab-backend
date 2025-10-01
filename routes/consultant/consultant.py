@@ -54,7 +54,8 @@ def create_consultant_enc():
             "contact_no": contact_no,
             "hospital": hospital,
             "user_name": user_name,
-            "password": plain_password   # plain only for returning once
+            "password": plain_password,   # plain only for returning once
+            "status": 201
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -78,7 +79,9 @@ def get_consultants_enc():
             d['password'] = decrypted
             del d['password_encrypted']
             consultants.append(d)
-        return jsonify(consultants), 200
+        return jsonify({
+            "data": consultants,
+            "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
