@@ -58,10 +58,13 @@ def get_all_parameters():
             "currentPage": current_page
         }), 200
 
+<<<<<<< HEAD
+=======
         return jsonify({
             "data" : paginate_query(cur, base_query),
             "status" : 200 
         }), 200
+>>>>>>> main
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -70,15 +73,6 @@ def get_all_parameters():
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
 def get_parameter(parameter_id):
     try:
-<<<<<<< HEAD
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
-        cursor.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
-        parameter = cursor.fetchone()
-        cursor.close()
-
-        if not parameter:
-=======
         cur = mysql.connection.cursor()
         cur.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
         parameter = cur.fetchone()
@@ -97,7 +91,6 @@ def get_parameter(parameter_id):
                 
             }), 200
         else:
->>>>>>> main
             return jsonify({"error": "Parameter not found"}), 404
 
         return jsonify(parameter), 200

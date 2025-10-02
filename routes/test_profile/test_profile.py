@@ -75,11 +75,7 @@ def get_test_profile(test_profile_id):
             return jsonify({"error": "Test Profile not found"}), 404
 
         return jsonify(row), 200
-            return jsonify({"error": "Test&Profile not found"}), 404
-        column_names = [desc[0] for desc in cursor.description]
-        return jsonify({
-            "data": dict(zip(column_names, row)),
-                       "status" : 200}), 200
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -24,7 +24,6 @@ def create_interpretation():
     try:
         mysql = current_app.mysql
         data = request.get_json()
-
         errors = validate_interpretation_data(data, is_update=False)
         if errors:
             return jsonify({"error": errors}), 400
@@ -36,12 +35,21 @@ def create_interpretation():
         )
         mysql.connection.commit()
         cur.close()
+        
 
+<<<<<<< HEAD
+        return jsonify({"message": "Interpretation added",
+                    "status": 201}), 201
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+=======
         return jsonify({"message": "Interpretation created successfully"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"message": "Interpretation added",
                     "status": 201}), 201
+>>>>>>> main
 
 
 # -------------------- GET with Search + Pagination -------------------- #
@@ -50,12 +58,15 @@ def get_interpretations():
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
+<<<<<<< HEAD
+=======
     mysql = current_app.mysql
     cur = mysql.connection.cursor(DictCursor)
     base_query = "SELECT * FROM interpretations"
     return jsonify({
         "data" : paginate_query(cur, base_query),
         "status": 200}), 200
+>>>>>>> main
 
         # Query params
         search = request.args.get("search", "", type=str)
