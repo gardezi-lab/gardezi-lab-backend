@@ -1,6 +1,6 @@
 import math
 from flask import Blueprint, request, jsonify, current_app
-from MySQLdb.cursors import DictCursor   
+import MySQLdb.cursors
 
 # Blueprint with API prefix
 interpretation_bp = Blueprint("interpretations", __name__, url_prefix="/api/interpretations")
@@ -22,6 +22,7 @@ def validate_interpretation_data(data, is_update=False):
 @interpretation_bp.route("/", methods=["POST"])
 def create_interpretation():
     try:
+
         mysql = current_app.mysql
         data = request.get_json()
         errors = validate_interpretation_data(data, is_update=False)
@@ -35,38 +36,19 @@ def create_interpretation():
         )
         mysql.connection.commit()
         cur.close()
-        
 
-<<<<<<< HEAD
-        return jsonify({"message": "Interpretation added",
-                    "status": 201}), 201
-        
-    except Exception as e:
-        return jsonify({"error": str(e)})
-=======
         return jsonify({"message": "Interpretation created successfully"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    return jsonify({"message": "Interpretation added",
-                    "status": 201}), 201
->>>>>>> main
-
+    
 
 # -------------------- GET with Search + Pagination -------------------- #
 @interpretation_bp.route("/", methods=["GET"])
 def get_interpretations():
     try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
-<<<<<<< HEAD
-=======
-    mysql = current_app.mysql
-    cur = mysql.connection.cursor(DictCursor)
-    base_query = "SELECT * FROM interpretations"
-    return jsonify({
-        "data" : paginate_query(cur, base_query),
-        "status": 200}), 200
->>>>>>> main
+        mysql = current_app.mysql # type: ignore
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor) 
+       
 
         # Query params
         search = request.args.get("search", "", type=str)
@@ -149,12 +131,10 @@ def update_interpretation(id):
             return jsonify({"error": "Interpretation not found"}), 404
 
         cur.close()
-        return jsonify({"message": "Interpretation updated successfully"}), 200
+        return jsonify({"message": "Interpretation updated","status": 200})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    return jsonify({"message": "Interpretation updated",
-                    "status": 200
-                    })
+    
 
 
 # -------------------- DELETE -------------------- #
@@ -171,14 +151,8 @@ def delete_interpretation(id):
         if deleted_rows == 0:
             return jsonify({"error": "Interpretation not found"}), 404
 
-        return jsonify({"message": "Interpretation deleted successfully"}), 200
+        return jsonify({"message": "Interpretation deleted successfully","status":200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    mysql = current_app.mysql
-    cur = mysql.connection.cursor()
-    cur.execute("DELETE FROM interpretations WHERE id=%s", (id,))
-    mysql.connection.commit()
-    cur.close()
-    return jsonify({"message": "Interpretation deleted",
-                    "status": 200})
+    
     

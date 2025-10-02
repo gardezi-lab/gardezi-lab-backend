@@ -58,13 +58,6 @@ def get_all_parameters():
             "currentPage": current_page
         }), 200
 
-<<<<<<< HEAD
-=======
-        return jsonify({
-            "data" : paginate_query(cur, base_query),
-            "status" : 200 
-        }), 200
->>>>>>> main
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -92,8 +85,6 @@ def get_parameter(parameter_id):
             }), 200
         else:
             return jsonify({"error": "Parameter not found"}), 404
-
-        return jsonify(parameter), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -162,9 +153,7 @@ def update_parameter(parameter_id):
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Parameter updated successfully"}), 200
-        return jsonify({"message": "Parameter updated successfully",
-                        "status" : 200}), 200
+        return jsonify({"message": "Parameter updated successfully","status" : 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -186,11 +175,10 @@ def delete_parameter(parameter_id):
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Parameter deleted successfully"}), 200
+        return jsonify({"message": "Parameter deleted successfully","status":200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-        return jsonify({"message": "Parameter deleted successfully",
-                        "status":200}), 200
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     #-------------------parameter search by parameter name --------------------

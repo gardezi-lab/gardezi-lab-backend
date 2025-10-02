@@ -48,7 +48,7 @@ def get_departments():
         formatted_departments = [
             {
                 "id": dept["id"],
-                "department_name": dept["department_name"]
+                "department_name": dept["department"]
             }
             for dept in departments
         ]

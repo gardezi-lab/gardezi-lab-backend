@@ -53,9 +53,6 @@ def get_all_test_profiles():
             "totalPages": total_pages,
             "currentPage": current_page
         }), 200
-        return jsonify({
-            "data" : paginate_query(cursor, base_query),
-            "status" : 200})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -75,7 +72,7 @@ def get_test_profile(test_profile_id):
             return jsonify({"error": "Test Profile not found"}), 404
 
         return jsonify(row), 200
-            
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -123,18 +120,6 @@ def create_test_profile():
             "serology_elisa": serology_elisa,
             "interpretation": interpretation
         }), 201
-        return jsonify({"message": "Test&Profile created successfully",
-                        "id" : cursor.lastrowid,
-                        "test_name": test_name,
-                        "test_code": test_code,
-                        "sample_required": sample_required,
-                        "select_header": select_header,
-                        "fee": fee,
-                        "delivery_time": delivery_time,
-                        "serology_elisa": serology_elisa,
-                        "interpretation": interpretation,
-                        "status" : 201
-                        }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -174,17 +159,6 @@ def update_test_profile(test_profile_id):
         cursor.close()
 
         return jsonify({"message": "Test Profile updated successfully"}), 200
-        return jsonify({"message": "Test&Profile updated successfully",
-                        "test_name": test_name,
-                        "test_code": test_code,
-                        "sample_required": sample_required,
-                        "select_header": select_header,
-                        "fee": fee,
-                        "delivery_time": delivery_time,
-                        "serology_elisa": serology_elisa,
-                        "interpretation": interpretation,
-                        "status" : 200
-                        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -204,9 +178,7 @@ def delete_test_profile(test_profile_id):
         cursor.execute("DELETE FROM test_profiles WHERE id = %s", (test_profile_id,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Test Profile deleted successfully"}), 200
-        return jsonify({"message": "Test&Profile deleted successfully",
-                        "status" : 200}), 200
+        return jsonify({"message": "Test&Profile deleted successfully","status" : 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -223,8 +195,7 @@ def search_test_profile(test_name):
         if not rows:
             return jsonify({"error": "No Test&Profile found"}), 404
 
-        return jsonify({"test_profiles": rows,
-                        "status": 200}), 200
+        return jsonify({"test_profiles": rows,"status": 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -240,7 +211,6 @@ def get_departments():
         rows = cursor.fetchall()
         cursor.close()
         return jsonify(rows), 200
-        return jsonify({"data" :departments,
-                       "status": 200}), 200
+       
     except Exception as e:
         return jsonify({"error": str(e)}), 500
