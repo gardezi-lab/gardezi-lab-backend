@@ -1,9 +1,8 @@
+import math
 from flask import Blueprint, request, jsonify, current_app
-from utils.pagination import paginate_query
+from MySQLdb.cursors import DictCursor
 
 packages_bp = Blueprint('packages_bp', __name__, url_prefix='/api/test-packages')
-
-
 
 # -------- Helper: Validation --------
 def validate_package_data(data, is_update=False):
@@ -15,7 +14,6 @@ def validate_package_data(data, is_update=False):
         if not data.get("selected_test"):
             return "selected_test is required"
 
-    
     if data.get("price"):
         try:
             float(data["price"])
@@ -28,7 +26,6 @@ def validate_package_data(data, is_update=False):
 # -------- CREATE (POST) --------
 @packages_bp.route('/', methods=['POST'])
 def create_package():
-
     mysql = current_app.mysql
     data = request.get_json()
 
@@ -50,40 +47,73 @@ def create_package():
     return jsonify({"message": "Package created"}), 201
 
 
-# -------- READ ALL (GET) --------
+# -------- READ ALL (GET with Search + Pagination) --------
 @packages_bp.route('/', methods=['GET'])
 def get_packages():
+    try:
+        mysql = current_app.mysql
+        cur = mysql.connection.cursor(DictCursor)
 
-    mysql = current_app.mysql
-    cur = mysql.connection.cursor()
-    
-    base_query = "SELECT * FROM test_packages"
-    return jsonify(paginate_query(cur, base_query))
+        # query params
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+
+        offset = (current_page - 1) * record_per_page
+
+        # base query
+        base_query = "SELECT * FROM test_packages"
+        where_clauses = []
+        values = []
+
+        if search:
+            where_clauses.append("(name LIKE %s OR selected_test LIKE %s)")
+            values.extend([f"%{search}%", f"%{search}%"])
+
+        if where_clauses:
+            base_query += " WHERE " + " AND ".join(where_clauses)
+
+        # count total
+        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
+        cur.execute(count_query, values)
+        total_records = cur.fetchone()["total"]
+
+        # pagination
+        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        values.extend([record_per_page, offset])
+        cur.execute(base_query, values)
+        packages = cur.fetchall()
+
+        total_pages = math.ceil(total_records / record_per_page)
+
+        return jsonify({
+            "data": packages,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # -------- READ ONE (GET by id) --------
 @packages_bp.route('/<int:id>', methods=['GET'])
 def get_package(id):
-
     mysql = current_app.mysql
-    cur = mysql.connection.cursor()
+    cur = mysql.connection.cursor(DictCursor)
     cur.execute("SELECT * FROM test_packages WHERE id=%s", (id,))
     row = cur.fetchone()
     cur.close()
 
     if row:
-        return jsonify({
-            "id": row[0],
-            "name": row[1],
-            "price": float(row[2]),
-            "selected_test": row[3]
-        })
+        return jsonify(row), 200
     return jsonify({"error": "Package not found"}), 404
 
 
 # -------- UPDATE (PUT) --------
 @packages_bp.route('/<int:id>', methods=['PUT'])
 def update_package(id):
-
     mysql = current_app.mysql
     data = request.get_json()
 
@@ -110,7 +140,6 @@ def update_package(id):
 # -------- DELETE (DELETE) --------
 @packages_bp.route('/<int:id>', methods=['DELETE'])
 def delete_package(id):
-    
     mysql = current_app.mysql
     cur = mysql.connection.cursor()
     cur.execute("DELETE FROM test_packages WHERE id=%s", (id,))

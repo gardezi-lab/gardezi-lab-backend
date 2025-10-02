@@ -1,13 +1,14 @@
+import math
 from flask import Flask, request, jsonify, Blueprint, current_app
+from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
-from utils.pagination import paginate_query
-
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
 mysql = MySQL()
 
-#================== patient Entry Crud Operations ==================#
-#------------------- Create Patient Entry ------------------#
+# ================== Patient Entry CRUD Operations ================== #
+
+# ------------------- Create Patient Entry ------------------ #
 @patient_entry_bp.route('/', methods=['POST'])
 def create_patient_entry():
     try:
@@ -26,114 +27,103 @@ def create_patient_entry():
         priority = data.get('priority')
         remarks = data.get('remarks')
         test = data.get('test')
-        
-        if not cell or not patient_name or not father_hasband_MR or not age or not company or not reffered_by or not gender or not email or not address or not package or not sample or not priority or not remarks or not test:
+
+        if not all([cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test]):
             return jsonify({"error": "All fields are required"}), 400
-        if not isinstance(cell, str) or not isinstance(patient_name, str) or not isinstance(father_hasband_MR, str) or not isinstance(age, int) or not isinstance(company, str) or not isinstance(reffered_by, str) or not isinstance (gender, str) or not isinstance(email, str) or not isinstance(address, str) or not isinstance(package, str) or not isinstance(sample, str) or not isinstance(priority, str) or not isinstance(remarks, str) or not isinstance(test, str):
-            errors = []
-            if not isinstance(cell, str):
-                errors.append("cell must be a string")
-            if not isinstance(patient_name, str):
-                errors.append("patient_name must be a string")
-            if not isinstance(father_hasband_MR, str):
-                errors.append("father_hasband_MR must be a string")
-            if not isinstance(age, int):
-                errors.append("age must be an integer")
-            if not isinstance(company, str):
-                errors.append("company must be a string")
-            if not isinstance(reffered_by, str):
-                errors.append("reffered_by must be a string")
-            if not isinstance(gender, str):
-                errors.append("gender must be a string")
-            if not isinstance(email, str):
-                errors.append("email must be a string")
-            if not isinstance(address, str):
-                errors.append("address must be a string")
-            if not isinstance(package, str):
-                errors.append("package must be a string")
-            if not isinstance(sample, str):
-                errors.append("sample must be a string")
-            if not isinstance(priority, str):
-                errors.append("priority must be a string")
-            if not isinstance(remarks, str):
-                errors.append("remarks must be a string")
-            if not isinstance(test, str):
-                errors.append("test must be a string")
-            return jsonify({"errors": errors}), 400
+
+        if not isinstance(age, int):
+            return jsonify({"error": "age must be integer"}), 400
+
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
         insert_query = """
             INSERT INTO patient_entry (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        
         cursor.execute(insert_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test))
         mysql.connection.commit()
+        new_id = cursor.lastrowid
         cursor.close()
 
         return jsonify({
-    "message": "Patient entry created successfully",
-    "id": cursor.lastrowid,
-    "cell": cell,
-    "patient_name": patient_name,
-    "father_hasband_MR": father_hasband_MR,
-    "age": age,
-    "company": company,
-    "reffered_by": reffered_by,
-    "gender": gender,
-    "email": email,
-    "address": address,
-    "package": package,
-    "sample": sample,
-    "priority": priority,
-    "remarks": remarks,
-    "test": test
-}), 201
+            "message": "Patient entry created successfully",
+            "id": new_id
+        }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#------------------- Get All Patient Entry ------------------#
+
+
+# ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
 def get_all_patient_entries():
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(DictCursor)
+
+        # query params
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+
+        offset = (current_page - 1) * record_per_page
+
+        # base query
         base_query = "SELECT * FROM patient_entry"
-        return jsonify(paginate_query(cursor, base_query))
+        where_clauses = []
+        values = []
+
+        if search:
+            where_clauses.append(
+                "(cell LIKE %s OR patient_name LIKE %s OR father_hasband_MR LIKE %s OR company LIKE %s OR reffered_by LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
+            )
+            for _ in range(13):  # total searchable fields
+                values.append(f"%{search}%")
+
+        if where_clauses:
+            base_query += " WHERE " + " AND ".join(where_clauses)
+
+        # count total
+        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
+        cursor.execute(count_query, values)
+        total_records = cursor.fetchone()["total"]
+
+        # pagination
+        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        values.extend([record_per_page, offset])
+        cursor.execute(base_query, values)
+        rows = cursor.fetchall()
+
+        total_pages = math.ceil(total_records / record_per_page)
+
+        return jsonify({
+            "data": rows,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#------------------- Get Patient Entry by ID ------------------#
+
+
+# ------------------- Get Patient Entry by ID ------------------ #
 @patient_entry_bp.route('/<int:id>', methods=['GET'])
 def patient_get_by_id(id):
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(DictCursor)
         cursor.execute("SELECT * FROM patient_entry WHERE id = %s", (id,))
         row = cursor.fetchone()
         cursor.close()
         if row:
-            patient_entry = {
-                "id": row[0],
-                "cell": row[1],
-                "patient_name": row[2],
-                "father_hasband_MR": row[3],
-                "age": row[4],
-                "company": row[5],
-                "reffered_by": row[6],
-                "gender": row[7],
-                "email": row[8],
-                "address": row[9],
-                "package": row[10],
-                "sample": row[11],
-                "priority": row[12],
-                "remarks": row[13],
-                "test": row[14]
-            }
-            return jsonify({"patient_entry": patient_entry}), 200
+            return jsonify({"patient_entry": row}), 200
         return jsonify({"error": "Patient entry not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#------------------- Update Patient Entry by ID ------------------#
+
+
+# ------------------- Update Patient Entry by ID ------------------ #
 @patient_entry_bp.route('/<int:id>', methods=['PUT'])
 def update_patient_entry(id):
     try:
@@ -157,10 +147,10 @@ def update_patient_entry(id):
         cursor = mysql.connection.cursor()
         update_query = """
             UPDATE patient_entry
-            SET cell = %s, patient_name = %s, father_hasband_MR = %s, age = %s, company = %s,
-                reffered_by = %s, gender = %s, email = %s, address = %s, package = %s,
-                sample = %s, priority = %s, remarks = %s, test = %s
-            WHERE id = %s
+            SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, company=%s,
+                reffered_by=%s, gender=%s, email=%s, address=%s, package=%s,
+                sample=%s, priority=%s, remarks=%s, test=%s
+            WHERE id=%s
         """
         cursor.execute(update_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test, id))
         mysql.connection.commit()
@@ -168,7 +158,9 @@ def update_patient_entry(id):
         return jsonify({"message": "Patient entry updated successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#------------------- Delete Patient Entry by ID ------------------#
+
+
+# ------------------- Delete Patient Entry by ID ------------------ #
 @patient_entry_bp.route('/<int:id>', methods=['DELETE'])
 def delete_patient_entry(id):
     try:
@@ -180,5 +172,3 @@ def delete_patient_entry(id):
         return jsonify({"message": "Patient entry deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-#=================================================================#
