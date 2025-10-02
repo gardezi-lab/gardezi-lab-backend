@@ -1,10 +1,7 @@
-import random, string
-from flask import Blueprint, request, jsonify,current_app
+import math, random, string
+from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
-import jwt
-import datetime
-from utils.pagination import paginate_query
-
+from MySQLdb.cursors import DictCursor
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 mysql = MySQL()
@@ -64,14 +61,50 @@ def create_user():
         return jsonify({"error": str(e)}), 500
 
 
-#------------------- Users GET --------------------
+#------------------- Users GET (with Search + Pagination) --------------------
 @users_bp.route('/', methods=['GET'])
 def get_users():
     try:
-        cursor = mysql.connection.cursor()
-        
-        base_query = 'SELECT * FROM users'
-        return jsonify(paginate_query(cursor, base_query))
+        cur = mysql.connection.cursor(DictCursor)
+
+        # query params
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+        offset = (current_page - 1) * record_per_page
+
+        # base query
+        base_query = "SELECT id, name, contact_no, user_name, password, role, age FROM users"
+        where_clauses = []
+        values = []
+
+        if search:
+            where_clauses.append("(name LIKE %s OR user_name LIKE %s OR role LIKE %s)")
+            values.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+        if where_clauses:
+            base_query += " WHERE " + " AND ".join(where_clauses)
+
+        # total count
+        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
+        cur.execute(count_query, values)
+        total_records = cur.fetchone()["total"]
+
+        # pagination
+        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        values.extend([record_per_page, offset])
+        cur.execute(base_query, values)
+        users = cur.fetchall()
+
+        total_pages = math.ceil(total_records / record_per_page)
+
+        return jsonify({
+            "data": users,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -80,7 +113,7 @@ def get_users():
 @users_bp.route('/<int:id>', methods=['GET'])
 def get_user_by_id(id):
     try:
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(DictCursor)
         cursor.execute("""
             SELECT id, name, contact_no, user_name, password, role, age 
             FROM users WHERE id = %s
@@ -88,8 +121,7 @@ def get_user_by_id(id):
         row = cursor.fetchone()
         if not row:
             return jsonify({"error": "User not found"}), 404
-        column_names = [desc[0] for desc in cursor.description]
-        return jsonify(dict(zip(column_names, row))), 200
+        return jsonify(row), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -144,30 +176,6 @@ def delete_user(id):
         return jsonify({"error": str(e)}), 500
 
 
-#------------------- Users Search by Name --------------------
-@users_bp.route('/search/<string:name>', methods=['GET'])
-def search_users(name):
-    try:
-        cursor = mysql.connection.cursor()
-        search_query = """
-            SELECT id, name, contact_no, user_name, password, age, role
-            FROM users
-            WHERE name LIKE %s
-        """
-        cursor.execute(search_query, (f"%{name}%",))
-        rows = cursor.fetchall()
-
-        if not rows:
-            return jsonify({"error": "User not found"}), 404
-
-        column_names = [desc[0] for desc in cursor.description]
-        users = [dict(zip(column_names, row)) for row in rows]
-        return jsonify(users), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 #----------------- Get Role Wise User List ---------------------
 @users_bp.route('/datalist/<string:role_name>', methods=['GET'])
 def datalist_role(role_name):
@@ -188,5 +196,3 @@ def datalist_role(role_name):
         return jsonify(roles), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
