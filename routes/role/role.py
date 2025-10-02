@@ -54,6 +54,9 @@ def get_roles():
             "currentPage": current_page
         }), 200
 
+        return jsonify({
+            "data" : paginate_query(cur,base_query),
+            "status" : 200})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -68,7 +71,9 @@ def get_role(role_id):
         role = cur.fetchone()
         cur.close()
         if role:
-            return jsonify(role), 200
+            return jsonify({
+                "data" : role,
+                "status" :200 }), 200
         else:
             return jsonify({"error": "Role not found"}), 404
     except Exception as e:
@@ -91,7 +96,8 @@ def create_role():
         cur.execute("INSERT INTO roles (role_name) VALUES (%s)", (role_name,))
         mysql.connection.commit()
         cur.close()
-        return jsonify({"message": "Role created successfully"}), 201
+        return jsonify({"message": "Role created successfully",
+                        "status" : 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -124,7 +130,8 @@ def update_role(role_id):
         cur.execute("UPDATE roles SET role_name = %s WHERE id = %s", (role_name, role_id))
         mysql.connection.commit()
         cur.close()
-        return jsonify({"message": "Role updated successfully"}), 200
+        return jsonify({"message": "Role updated successfully",
+                        "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -138,6 +145,36 @@ def delete_role(role_id):
         cur.execute("DELETE FROM roles WHERE id = %s", (role_id,))
         mysql.connection.commit()
         cur.close()
-        return jsonify({"message": "Role deleted successfully"}), 200
+        return jsonify({"message": "Role deleted successfully",
+                        "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+#--------------------Search Role by name---------------------#
+@role_bp.route('/search/<string:role_name>', methods=['GET'])
+def search_role(role_name):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute(
+            "SELECT * FROM roles WHERE role_name LIKE %s",
+            ('%' + role_name + '%',)
+        )
+        results = cur.fetchall()
+        cur.close()
+
+        roles = []
+        for result in results:
+            roles.append({
+                "id": result[0],
+                "role_name": result[1],
+                "status" : 200
+            })
+
+        if not roles:
+            return jsonify({"message": "No roles found"}), 404
+
+        return jsonify(roles), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#===========================================================#
+

@@ -11,56 +11,27 @@ mysql = MySQL()
 @account_bp.route('/', methods=['GET'])
 def get_accountheads():
     try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        mysql = current_app.mysql  # type: ignore
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads")
+        result = cursor.fetchall()
 
-        # query params
-        search = request.args.get("search", "", type=str)
-        current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
-
-        offset = (current_page - 1) * record_per_page
-
-        # base query
-        base_query = "SELECT * FROM account_heads"
-        where_clauses = []
-        values = []
-
-        if search:
-            where_clauses.append(
-                "(name_head LIKE %s OR head_code LIKE %s OR parent_account LIKE %s)"
-            )
-            values.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
-
-        if where_clauses:
-            base_query += " WHERE " + " AND ".join(where_clauses)
-
-        # total count
-        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
-        cursor.execute(count_query, values)
-        total_records = cursor.fetchone()["total"]
-
-        # add pagination
-        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
-        values.extend([record_per_page, offset])
-
-        cursor.execute(base_query, values)
-        accounts = cursor.fetchall()
-
-        total_pages = math.ceil(total_records / record_per_page)
-
-        return jsonify({
-            "data": accounts,
-            "totalRecords": total_records,
-            "totalPages": total_pages,
-            "currentPage": current_page
-        }), 200
-
+        accountheads = []
+        for row in result:
+            accountheads.append({
+                "id": row[0],              # 👈 id add kar diya
+                "head_name": row[1],
+                "head_code": row[2],
+                "ob": row[3],
+                "ob_date": row[4],
+                "parent_account": row[5],
+                "created_at": row[6]
+            })
+        return jsonify(accountheads), 200
     except Exception as e:   
         return jsonify({"error": str(e)}), 500
 
 
-# -------------------- POST -------------------- #
 @account_bp.route('/', methods=['POST'])
 def create_accounthead():
     try:
@@ -77,28 +48,59 @@ def create_accounthead():
 
         if not name_head or name_head.strip() == "":
             return jsonify({"error": "Head name cannot be empty"}), 400
-
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM account_heads WHERE name_head=%s", (name_head,))
-        existing_head = cursor.fetchone()
-
-        if existing_head:
+        # Check for duplicate department
+        cursor = mysql.connection.cursor() # type: ignore
+        cursor.execute("SELECT * FROM account_heads WHERE name_head=%s", (head,))
+        existing_department = cursor.fetchone()
+        # Check if department is empty
+        if existing_department:
             return jsonify({"error": "Head Name already exists"}), 400
-
-        if name_head.isnumeric():
-            return jsonify({"error": "Head Name cannot be a number"}), 400
-
-        cursor.execute(
-            "INSERT INTO account_heads (name_head, head_code, ob, ob_date, parent_account) VALUES (%s, %s, %s, %s, %s)",
-            (name_head, head_code, ob, ob_date, parent_account,)
-        )
-        mysql.connection.commit()
+        #check if department is a number
+        if isinstance(head, int):
+            return jsonify({"error": "Head Name name cannot be a number"}), 400
+        
+        cursor.execute("INSERT INTO account_heads (name_head, head_code, ob, ob_date, parent_account) VALUES (%s, %s, %s, %s, %s)", (head, head_code, ob, ob_date, parent_account,))
+        mysql.connection.commit() # type: ignore
         cursor.close()
 
         return jsonify({"message": "Account Head created successfully"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@account_bp.route('/<int:id>', methods=['GET'])
+def get_account_by_id(id):
+    try:
+        mysql = current_app.mysql # type: ignore
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        cursor.close()
+        if result:
+            department = {
+                "id": result[0],
+                "name_head": result[1]
+            }
+            return jsonify(department), 200
+        else:
+            return jsonify({"message": "Head Name not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@account_bp.route('/<int:id>', methods=['DELETE'])
+def delete_head(id): 
+    try:
+        cursor = mysql.connection.cursor() # type: ignore
+        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": "Head not found"}), 404
+        cursor = mysql.connection.cursor() # type: ignore
+        cursor.execute("DELETE FROM account_heads WHERE id=%s", (id,))
+        mysql.connection.commit() # type: ignore
+        cursor.close()
+        return jsonify({"message": "Head deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # -------------------- PUT (Update) -------------------- #
 @account_bp.route('/<int:id>', methods=['PUT'])
@@ -111,22 +113,19 @@ def update_account_head(id):
         ob_date = data.get("ob_date")
         parent_account = data.get("parent_account")
         
-        if not isinstance(name_head, str) or not isinstance(head_code, str):
-            return jsonify({"error": "Head name and code must be strings"}), 400
+        # if not isinstance(name_head, str) or not isinstance(head_code, str) :
+        #     return jsonify({"error": "All fields must be strings"}), 400
 
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM account_heads WHERE id = %s", (id,))
         row = cursor.fetchone()
         if not row:
             return jsonify({"error": "Head not found"}), 404
 
-        cursor.execute(
-            """UPDATE account_heads 
-               SET name_head = %s, head_code = %s, ob = %s, ob_date = %s, parent_account = %s 
-               WHERE id = %s""",
-            (name_head, head_code, ob, ob_date, parent_account, id)
-        )
-        mysql.connection.commit()
+        update_query = """UPDATE account_heads 
+                          SET name_head = %s, head_code = %s, ob = %s, ob_date = %s, parent_account = %s WHERE id = %s"""
+        cursor.execute(update_query, (name_head, head_code, ob, ob_date, parent_account,  id))
+        mysql.connection.commit() # type: ignore
         cursor.close()
 
         return jsonify({

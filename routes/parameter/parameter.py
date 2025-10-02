@@ -24,6 +24,7 @@ def get_all_parameters():
 
         # Base query
         base_query = "SELECT * FROM parameters"
+<<<<<<< HEAD
         where_clauses = []
         values = []
 
@@ -58,6 +59,12 @@ def get_all_parameters():
             "currentPage": current_page
         }), 200
 
+=======
+        return jsonify({
+            "data" : paginate_query(cur, base_query),
+            "status" : 200 
+        }), 200
+>>>>>>> main
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -66,6 +73,7 @@ def get_all_parameters():
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
 def get_parameter(parameter_id):
     try:
+<<<<<<< HEAD
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
         cursor.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
@@ -73,6 +81,26 @@ def get_parameter(parameter_id):
         cursor.close()
 
         if not parameter:
+=======
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
+        parameter = cur.fetchone()
+        cur.close()
+        if parameter:
+            return jsonify({
+                "id": parameter[0],
+                "parameter_name": parameter[1],
+                "sub_heading": parameter[2],
+                "input_type": parameter[3],
+                "unit": parameter[4],
+                "normal_value": parameter[5],
+                "default_value": parameter[6],
+                "status" : 200
+                
+                
+            }), 200
+        else:
+>>>>>>> main
             return jsonify({"error": "Parameter not found"}), 404
 
         return jsonify(parameter), 200
@@ -108,7 +136,8 @@ def create_parameter():
         )
         mysql.connection.commit()
         cur.close()
-        return jsonify({"message": "Parameter created successfully"}), 201
+        return jsonify({"message": "Parameter created successfully",
+                        "status" : 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -126,6 +155,7 @@ def update_parameter(parameter_id):
         normal_value = data.get("normal_value") or data.get("normalvalue")
         default_value = data.get("default_value")
 
+        # Check if all fields are provided
         if not all([parameter_name, sub_heading, input_type, unit, normal_value, default_value]):
             return jsonify({"error": "All fields are required"}), 400
 
@@ -143,6 +173,9 @@ def update_parameter(parameter_id):
         cur.close()
 
         return jsonify({"message": "Parameter updated successfully"}), 200
+        return jsonify({"message": "Parameter updated successfully",
+                        "status" : 200}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -166,3 +199,39 @@ def delete_parameter(parameter_id):
         return jsonify({"message": "Parameter deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+        return jsonify({"message": "Parameter deleted successfully",
+                        "status":200}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    #-------------------parameter search by parameter name --------------------
+@parameter_bp.route('/search/<string:parameter_name>', methods=['GET'])
+def search_parameter(parameter_name):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameters WHERE parameter_name LIKE %s", ('%' + parameter_name + '%',))
+        results = cur.fetchall()
+
+        # Agar koi result nahi mila to not found ka response bhejo
+        if not results:
+            cur.close()
+            return jsonify({"message": "Parameter not found"}), 404
+
+        parameters = []
+        for result in results:
+            parameters.append({
+                "id": result[0],
+                "parameter_name": result[1],
+                "sub_heading": result[2],
+                "input_type": result[3],
+                "unit": result[4],
+                "normal_value": result[5],
+                "default_value": result[6],
+                "status" : 200
+                
+            })
+        cur.close()
+        return jsonify(parameters), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    

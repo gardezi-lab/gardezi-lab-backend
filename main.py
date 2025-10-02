@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response,render_template
 from dotenv import load_dotenv
 from flask_mysqldb import MySQL
 import os
@@ -19,7 +19,7 @@ from routes.parameter.parameter import parameter_bp
 from routes.test_profile.test_profile import test_profile_bp
 from routes.patient_entry.patient_entry import patient_entry_bp
 from routes.authentication.authentication import authentication_bp
-
+from routes.invoice.invoice import invoice_bp
 
 
 
@@ -37,6 +37,7 @@ app.url_map.strict_slashes = False
 # Set secret key from .env
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['TOKEN_EXPIRY_HOURS'] = int(os.getenv("TOKEN_EXPIRY_HOURS", 2))  # default 2 hours
+
 #  Blacklist set
 app.blacklisted_tokens = set()
 # ---------- MySQL Config ----------
@@ -51,7 +52,7 @@ try:
     app.mysql = mysql
     print(" MySQL config loaded successfully:", app.config['MYSQL_HOST'], app.config['MYSQL_DB'])
 except Exception as e:
-    print("❌ MySQL config failed:", str(e))
+    print("MySQL config failed:", str(e))
 
 
 # ---------- Manual CORS (Werkzeug / Flask) ----------
@@ -76,9 +77,10 @@ def handle_preflight():
 
 
 # Root test route
-@app.route("/")
+@app.route("/api")
 def first():
-    return jsonify({"message": "Gardezi Lab Backend Api"})
+    return render_template("index.html")
+    
 
 
 # ---------- Register Blueprints ----------
@@ -93,9 +95,9 @@ app.register_blueprint(role_bp)
 app.register_blueprint(test_profile_bp)
 app.register_blueprint(patient_entry_bp)
 app.register_blueprint(authentication_bp)
+app.register_blueprint(invoice_bp)
 
-
-
+#main
 
 app.register_blueprint(account_bp)
 

@@ -103,6 +103,9 @@ def get_all_patient_entries():
             "currentPage": current_page
         }), 200
 
+        return jsonify({
+            "data" : paginate_query(cursor, base_query),
+            "status" : 200})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -118,6 +121,25 @@ def patient_get_by_id(id):
         cursor.close()
         if row:
             return jsonify({"patient_entry": row}), 200
+            patient_entry = {
+                "id": row[0],
+                "cell": row[1],
+                "patient_name": row[2],
+                "father_hasband_MR": row[3],
+                "age": row[4],
+                "company": row[5],
+                "reffered_by": row[6],
+                "gender": row[7],
+                "email": row[8],
+                "address": row[9],
+                "package": row[10],
+                "sample": row[11],
+                "priority": row[12],
+                "remarks": row[13],
+                "test": row[14],
+                "status" : 200
+            }
+            return jsonify({"patient_entry": patient_entry}), 200
         return jsonify({"error": "Patient entry not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -155,7 +177,8 @@ def update_patient_entry(id):
         cursor.execute(update_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test, id))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Patient entry updated successfully"}), 200
+        return jsonify({"message": "Patient entry updated successfully",
+                        "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -169,6 +192,7 @@ def delete_patient_entry(id):
         cursor.execute("DELETE FROM patient_entry WHERE id = %s", (id,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Patient entry deleted successfully"}), 200
+        return jsonify({"message": "Patient entry deleted successfully",
+                        "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

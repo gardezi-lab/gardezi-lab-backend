@@ -57,6 +57,10 @@ def get_companies_panels():
             "currentPage": current_page
         }), 200
 
+        return jsonify({
+            "status" : 200,
+            "data": paginate_query(cursor, base_query)
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -96,7 +100,8 @@ def create_companies_panel():
             (company_name, head_name, contact_no, user_name, age)
         )
         mysql.connection.commit()
-        return jsonify({"message": "Companies panel created successfully"}), 201
+        return jsonify({"message": "Companies panel created successfully",
+                        "status": 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -134,7 +139,9 @@ def update_companies_panel(id):
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
-        return jsonify({"message": "Companies panel updated successfully"}), 200
+        return jsonify({"message": "Companies panel updated successfully",
+                        "status": 200
+                        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -149,7 +156,8 @@ def delete_companies_panel(id):
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
-        return jsonify({"message": "Companies panel deleted successfully"}), 200
+        return jsonify({"message": "Companies panel deleted successfully",
+                        "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -165,5 +173,39 @@ def get_companies_panel_by_id(id):
         if not result:
             return jsonify({"error": "Companies panel not found"}), 404
         return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        companies_panel = {
+            "id": result[0],
+            "company_name": result[1],
+            "head_name": result[2],
+            "contact_no": result[3],
+            "user_name": result[4],
+            "age": result[5],
+            "status": 200
+        }
+        return jsonify(companies_panel), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#-------------------------Company Search by Head Name-------------------
+@companies_panel_bp.route('/search/<string:head_name>', methods=['GET'])
+def search_companies_panel_by_head_name(head_name):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM companies_panel WHERE head_name LIKE %s", ('%' + head_name + '%',))
+        result = cursor.fetchall()
+        companies_panels = []
+        for row in result:
+            companies_panels.append({
+                "id": row[0],
+                "company_name": row[1],
+                "head_name": row[2],
+                "contact_no": row[3],
+                "user_name": row[4],
+                "age": row[5],
+                "status": 200
+            })
+        return jsonify(companies_panels), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

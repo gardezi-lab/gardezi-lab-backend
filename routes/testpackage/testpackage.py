@@ -44,7 +44,8 @@ def create_package():
     ))
     mysql.connection.commit()
     cur.close()
-    return jsonify({"message": "Package created"}), 201
+    return jsonify({"message": "Package created",
+                    "status" : 201}), 201
 
 
 # -------- READ ALL (GET with Search + Pagination) --------
@@ -108,6 +109,13 @@ def get_package(id):
 
     if row:
         return jsonify(row), 200
+        return jsonify({
+            "id": row[0],
+            "name": row[1],
+            "price": float(row[2]),
+            "selected_test": row[3],
+            "status" : 200
+        })
     return jsonify({"error": "Package not found"}), 404
 
 
@@ -134,7 +142,8 @@ def update_package(id):
     ))
     mysql.connection.commit()
     cur.close()
-    return jsonify({"message": "Package updated"})
+    return jsonify({"message": "Package updated",
+                    "status" : 200})
 
 
 # -------- DELETE (DELETE) --------
@@ -146,3 +155,5 @@ def delete_package(id):
     mysql.connection.commit()
     cur.close()
     return jsonify({"message": "Package deleted"})
+    return jsonify({"message": "Package deleted",
+                    "status" : 200})
