@@ -1,48 +1,55 @@
+import math
 from flask import Blueprint, request, jsonify, current_app
+import MySQLdb.cursors
 from flask_mysqldb import MySQL
 
-account_bp = Blueprint('account', __name__, url_prefix='/api/account')
+account_bp = Blueprint('account', __name__, url_prefix='/api/accounts')
 mysql = MySQL()
 
 
+# -------------------- GET with Search + Pagination -------------------- #
 @account_bp.route('/', methods=['GET'])
 def get_accountheads():
     try:
-        mysql = current_app.mysql
+        mysql = current_app.mysql  # type: ignore
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT * FROM account_heads")
         result = cursor.fetchall()
-        #convert result to json
+
         accountheads = []
         for row in result:
             accountheads.append({
-                "head_name": row[0],
-                "head_code": row[1],
-                "ob": row[2],
-                "ob_date": row[3],
-                "parent_account": row[4],
-                "created_at": row[5]
+                "id": row[0],              # 👈 id add kar diya
+                "head_name": row[1],
+                "head_code": row[2],
+                "ob": row[3],
+                "ob_date": row[4],
+                "parent_account": row[5],
+                "created_at": row[6]
             })
         return jsonify(accountheads), 200
     except Exception as e:   
         return jsonify({"error": str(e)}), 500
 
+
 @account_bp.route('/', methods=['POST'])
 def create_accounthead():
     try:
+        mysql = current_app.mysql
         data = request.get_json(force=False)
         if not data:
             return jsonify({"error": "Invalid or missing JSON body"}), 400
 
-        head = data.get('name_head')
+        name_head = data.get('name_head')
         head_code = data.get('head_code')
         ob = data.get('ob')
         ob_date = data.get('ob_date')
         parent_account = data.get('parent_account')
-        if head == "":
+
+        if not name_head or name_head.strip() == "":
             return jsonify({"error": "Head name cannot be empty"}), 400
         # Check for duplicate department
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM account_heads WHERE name_head=%s", (head,))
         existing_department = cursor.fetchone()
         # Check if department is empty
@@ -53,8 +60,9 @@ def create_accounthead():
             return jsonify({"error": "Head Name name cannot be a number"}), 400
         
         cursor.execute("INSERT INTO account_heads (name_head, head_code, ob, ob_date, parent_account) VALUES (%s, %s, %s, %s, %s)", (head, head_code, ob, ob_date, parent_account,))
-        mysql.connection.commit()
+        mysql.connection.commit() # type: ignore
         cursor.close()
+
         return jsonify({"message": "Account Head created successfully"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -62,7 +70,7 @@ def create_accounthead():
 @account_bp.route('/<int:id>', methods=['GET'])
 def get_account_by_id(id):
     try:
-        mysql = current_app.mysql
+        mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
         result = cursor.fetchone()
@@ -81,19 +89,20 @@ def get_account_by_id(id):
 @account_bp.route('/<int:id>', methods=['DELETE'])
 def delete_head(id): 
     try:
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
         result = cursor.fetchone()
         if not result:
             return jsonify({"error": "Head not found"}), 404
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("DELETE FROM account_heads WHERE id=%s", (id,))
-        mysql.connection.commit()
+        mysql.connection.commit() # type: ignore
         cursor.close()
         return jsonify({"message": "Head deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# -------------------- PUT (Update) -------------------- #
 @account_bp.route('/<int:id>', methods=['PUT'])
 def update_account_head(id):
     try:
@@ -104,10 +113,10 @@ def update_account_head(id):
         ob_date = data.get("ob_date")
         parent_account = data.get("parent_account")
         
-        if not isinstance(name_head, str) or not isinstance(head_code, str) :
-            return jsonify({"error": "All fields must be strings"}), 400
+        # if not isinstance(name_head, str) or not isinstance(head_code, str) :
+        #     return jsonify({"error": "All fields must be strings"}), 400
 
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM account_heads WHERE id = %s", (id,))
         row = cursor.fetchone()
         if not row:
@@ -116,15 +125,56 @@ def update_account_head(id):
         update_query = """UPDATE account_heads 
                           SET name_head = %s, head_code = %s, ob = %s, ob_date = %s, parent_account = %s WHERE id = %s"""
         cursor.execute(update_query, (name_head, head_code, ob, ob_date, parent_account,  id))
-        mysql.connection.commit()
+        mysql.connection.commit() # type: ignore
         cursor.close()
-        return jsonify({"message": "Head updated successfully",
-                        "name_head": name_head,
-                        "head_code": head_code,
-                        "ob": ob,
-                        "ob_date": ob_date,
-                        "parent_account": parent_account
-                        }), 200
+
+        return jsonify({
+            "message": "Head updated successfully",
+            "id": id,
+            "name_head": name_head,
+            "head_code": head_code,
+            "ob": ob,
+            "ob_date": ob_date,
+            "parent_account": parent_account
+        }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500    
+        return jsonify({"error": str(e)}), 500
+
+
+# -------------------- DELETE -------------------- #
+@account_bp.route('/<int:id>', methods=['DELETE'])
+def delete_account_head(id):
+    try:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": "Account Head not found"}), 404
+
+        cursor.execute("DELETE FROM account_heads WHERE id=%s", (id,))
+        mysql.connection.commit()
+        cursor.close()
+
+        return jsonify({"message": "Account Head deleted successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# -------------------- GET by ID -------------------- #
+@account_bp.route('/<int:id>', methods=['GET'])
+def get_account_head_by_id(id):
+    try:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result:
+            return jsonify(result), 200
+        else:
+            return jsonify({"error": "Account Head not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

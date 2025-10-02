@@ -10,7 +10,7 @@ mysql = MySQL()
 @department_bp.route('', methods=['GET'])
 def get_departments():
     try:
-        mysql = current_app.mysql
+        mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  # ✅ DictCursor use karo
 
         # Query params from frontend
@@ -26,18 +26,18 @@ def get_departments():
         values = []
 
         if search:
-            where_clauses.append("department_name LIKE %s")
+            where_clauses.append("department LIKE %s")
             values.append(f"%{search}%")
 
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
 
-        # ✅ Count total records
+        # Count total records
         count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
         cursor.execute(count_query, values)
         total_records = cursor.fetchone()["total"]
 
-        # ✅ Add pagination to main query
+        # Add pagination
         base_query += " LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
 
@@ -47,8 +47,8 @@ def get_departments():
         # ✅ Transform data into custom format
         formatted_departments = [
             {
-                "id": dept["id"],  # db column "id"
-                "department_name": dept["department"]  # db column "department_name"
+                "id": dept["id"],
+                "department_name": dept["department_name"]
             }
             for dept in departments
         ]
@@ -66,7 +66,7 @@ def get_departments():
         return jsonify({"error": str(e)}), 500
 
 
-#----------------Department Create -------------------
+# ---------------- Department Create ------------------- #
 @department_bp.route('/', methods=['POST'])
 def create_department():
     try:
@@ -75,79 +75,86 @@ def create_department():
             return jsonify({"error": "Invalid or missing JSON body"}), 400
 
         department_name = data.get('department_name')
-        if department_name == "":
+        if not department_name or department_name.strip() == "":
             return jsonify({"error": "Department name cannot be empty"}), 400
         # Check for duplicate department
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM departments WHERE department=%s", (department_name,))
         existing_department = cursor.fetchone()
-        # Check if department is empty
         if existing_department:
             return jsonify({"error": "Department already exists"}), 400
-        #check if department is a number
+
+        # Check if department is a number
         if isinstance(department_name, int):
             return jsonify({"error": "Department name cannot be a number"}), 400
 
         cursor.execute("INSERT INTO departments (department) VALUES (%s)", (department_name,))
-        mysql.connection.commit()
+        mysql.connection.commit() # type: ignore
         cursor.close()
         return jsonify({"message": "Department created successfully",
                         "status": 201}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#----------------Department Update -------------------
+
+# ---------------- Department Update ------------------- #
 @department_bp.route('/<int:id>', methods=['PUT'])
 def update_department(id):
     try:
         data = request.get_json()
-        department = data.get('department_name')
-        #check if department is number
-        if isinstance(department,int):
+        department_name = data.get('department_name')
+
+        if not department_name or department_name.strip() == "":
+            return jsonify({"error": "Department name cannot be empty"}), 400
+
+        if isinstance(department_name, int):
             return jsonify({"error": "Department name cannot be a number"}), 400
         #check if department is already exists
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM departments WHERE department=%s", (department,))
         existing_department = cursor.fetchone()
         if existing_department:
             return jsonify({"error": "Department already exists"}), 400
         cursor.execute("UPDATE departments SET department=%s WHERE id=%s", (department, id))
-        mysql.connection.commit()
+        mysql.connection.commit() # type: ignore
         cursor.close()
         return jsonify({"message": "Department updated successfully",
                         "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#----------------Department Delete -------------------
+
+# ---------------- Department Delete ------------------- #
 @department_bp.route('/<int:id>', methods=['DELETE'])
-def delete_department(id): 
+def delete_department(id):
     try:
         #if department id is not in database then return error
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("SELECT * FROM departments WHERE id=%s", (id,))
         result = cursor.fetchone()
         if not result:
             return jsonify({"error": "Department not found"}), 404
         
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor() # type: ignore
         cursor.execute("DELETE FROM departments WHERE id=%s", (id,))
-        mysql.connection.commit()
+        mysql.connection.commit() # type: ignore
         cursor.close()
         return jsonify({"message": "Department deleted successfully",
                         "status" : 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#----------------Department Get by ID -------------------
+
+# ---------------- Department Get by ID ------------------- #
 @department_bp.route('/<int:id>', methods=['GET'])
 def get_department_by_id(id):
     try:
-        mysql = current_app.mysql
+        mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT * FROM departments WHERE id=%s", (id,))
         result = cursor.fetchone()
         cursor.close()
+
         if result:
             department = {
                 "id": result[0],
@@ -160,18 +167,21 @@ def get_department_by_id(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#----------------Department Search by Name -------------------
+
+# ---------------- Department Search by Name ------------------- #
 @department_bp.route('/search/<string:name>', methods=['GET'])
 def search_departments(name):
     try:
-        mysql = current_app.mysql
+        mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT id, department_name FROM departments WHERE department_name LIKE %s", ('%' + name + '%',))
-        
-        result = cursor.fetchone()  
-        
+        cursor.execute(
+            "SELECT id, department_name FROM departments WHERE department_name LIKE %s",
+            ('%' + name + '%',)
+        )
+        result = cursor.fetchone()
+
         if not result:
-            return jsonify({"message": "NO departments found"}), 404
+            return jsonify({"message": "No departments found"}), 404
 
         return jsonify({
             "id": result[0],
@@ -180,4 +190,3 @@ def search_departments(name):
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
