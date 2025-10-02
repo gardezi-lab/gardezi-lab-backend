@@ -58,6 +58,13 @@ def get_all_parameters():
             "currentPage": current_page
         }), 200
 
+<<<<<<< HEAD
+=======
+        return jsonify({
+            "data" : paginate_query(cur, base_query),
+            "status" : 200 
+        }), 200
+>>>>>>> main
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

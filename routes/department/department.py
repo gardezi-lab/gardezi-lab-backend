@@ -45,7 +45,6 @@ def get_departments():
         departments = cursor.fetchall()
         #
         # ✅ Transform data into custom format
-
         formatted_departments = [
             {
                 "id": dept["id"],
