@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from flask_mysqldb import MySQL
 import os
 
+
 # Import blueprints (only once)
 from routes.department.department import department_bp
 from routes.consultant.consultant import consultant_bp
@@ -19,6 +20,9 @@ from routes.test_profile.test_profile import test_profile_bp
 from routes.patient_entry.patient_entry import patient_entry_bp
 from routes.authentication.authentication import authentication_bp
 from routes.invoice.invoice import invoice_bp
+
+
+
 
 from routes.account_book.account import account_bp
 
