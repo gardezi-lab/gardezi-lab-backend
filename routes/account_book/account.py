@@ -12,22 +12,61 @@ mysql = MySQL()
 def get_accountheads():
     try:
         mysql = current_app.mysql  # type: ignore
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM account_heads")
-        result = cursor.fetchall()
+        # 👇 DictCursor use kiya
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        accountheads = []
-        for row in result:
-            accountheads.append({
-                "id": row[0],              # 👈 id add kar diya
-                "head_name": row[1],
-                "head_code": row[2],
-                "ob": row[3],
-                "ob_date": row[4],
-                "parent_account": row[5],
-                "created_at": row[6]
-            })
-        return jsonify(accountheads), 200
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+        offset = (current_page - 1) * record_per_page
+
+        base_query = "SELECT * FROM account_heads"
+        where_clauses = []
+        values = []
+
+        if search:
+            where_clauses.append("(name_head LIKE %s OR head_code LIKE %s)")
+            values.extend([f"%{search}%", f"%{search}%"])
+
+        if where_clauses:
+            base_query += " WHERE " + " AND ".join(where_clauses)
+
+        # total count
+        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) AS subquery"
+        cursor.execute(count_query, values)
+        total_records = cursor.fetchone()["total"]  # 👈 DictCursor ki wajah se yeh chalega
+
+        # pagination
+        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        values.extend([record_per_page, offset])
+        cursor.execute(base_query, values)
+        users = cursor.fetchall()  # 👈 ab yeh list of dicts return karega
+
+        total_pages = math.ceil(total_records / record_per_page)
+
+        return jsonify({
+            "data": users,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500 
+
+
+        # accountheads = []
+        # for row in result:
+        #     accountheads.append({
+        #         "id": row[0],              # 👈 id add kar diya
+        #         "head_name": row[1],
+        #         "head_code": row[2],
+        #         "ob": row[3],
+        #         "ob_date": row[4],
+        #         "parent_account": row[5],
+        #         "created_at": row[6]
+        #     })
+        # return jsonify(accountheads), 200
     except Exception as e:   
         return jsonify({"error": str(e)}), 500
 
