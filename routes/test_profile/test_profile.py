@@ -78,51 +78,79 @@ def get_test_profile(test_profile_id):
 
 
 # --------------------- Create a new test profile --------------------- #
+
 @test_profile_bp.route('/', methods=['POST'])
 def create_test_profile():
     try:
         data = request.get_json()
+
+        #  Basic string fields
         test_name = data.get("test_name")
         test_code = data.get("test_code")
         sample_required = data.get("sample_required")
         select_header = data.get("select_header")
         fee = data.get("fee")
         delivery_time = data.get("delivery_time")
-        serology_elisa = data.get("serology_elisa")
         interpretation = data.get("interpretation")
 
-        # validation
-        if not all([test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation]):
-            return jsonify({"error": "All fields are required"}), 400
-        if not all(isinstance(f, str) for f in [test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation]):
-            return jsonify({"error": "All fields must be strings"}), 400
+        #  Boolean fields conversion function
+        def to_bool(val):
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                return val.lower() in ['true', '1', 'yes', 'y']
+            if isinstance(val, int):
+                return val == 1
+            return False
 
+        serology_elisa = to_bool(data.get("serology_elisa"))
+        unit_ref_range = to_bool(data.get("unit_ref_range"))
+        test_formate = to_bool(data.get("test_formate"))
+
+        #  Validation
+        required_fields = [test_name, test_code, sample_required, select_header, fee, delivery_time, interpretation]
+        if not all(required_fields):
+            return jsonify({"error": "All required fields must be provided"}), 400
+
+        #  Insert into DB
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
+
         insert_query = """
-            INSERT INTO test_profiles (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO test_profiles 
+            (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation, unit_ref_range, test_formate) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation)) 
+
+        cursor.execute(insert_query, (
+            test_name, test_code, sample_required, select_header, fee, delivery_time,
+            serology_elisa, interpretation, unit_ref_range, test_formate
+        ))
         mysql.connection.commit()
+
         new_id = cursor.lastrowid
         cursor.close()
 
+        # Response
         return jsonify({
             "message": "Test Profile created successfully",
-            "id": new_id,
-            "test_name": test_name,
-            "test_code": test_code,
-            "sample_required": sample_required,
-            "select_header": select_header,
-            "fee": fee,
-            "delivery_time": delivery_time,
-            "serology_elisa": serology_elisa,
-            "interpretation": interpretation
+            "status": 201,
+            # "id": new_id,
+            # "test_name": test_name,
+            # "test_code": test_code,
+            # "sample_required": sample_required,
+            # "select_header": select_header,
+            # "fee": fee,
+            # "delivery_time": delivery_time,
+            # "serology_elisa": serology_elisa,
+            # "unit_ref_range": unit_ref_range,
+            # "test_formate": test_formate,
+            # "interpretation": interpretation
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # --------------------- Update a test profile --------------------- #

@@ -12,7 +12,7 @@ mysql = MySQL()
 def get_accountheads():
     try:
         mysql = current_app.mysql  # type: ignore
-        # 👇 DictCursor use kiya
+        #  DictCursor use kiya
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         search = request.args.get("search", "", type=str)
@@ -34,13 +34,13 @@ def get_accountheads():
         # total count
         count_query = f"SELECT COUNT(*) as total FROM ({base_query}) AS subquery"
         cursor.execute(count_query, values)
-        total_records = cursor.fetchone()["total"]  # 👈 DictCursor ki wajah se yeh chalega
+        total_records = cursor.fetchone()["total"]  #  DictCursor ki wajah se yeh chalega
 
         # pagination
         base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
         cursor.execute(base_query, values)
-        users = cursor.fetchall()  # 👈 ab yeh list of dicts return karega
+        users = cursor.fetchall()  #  ab yeh list of dicts return karega
 
         total_pages = math.ceil(total_records / record_per_page)
 
@@ -58,7 +58,7 @@ def get_accountheads():
         # accountheads = []
         # for row in result:
         #     accountheads.append({
-        #         "id": row[0],              # 👈 id add kar diya
+        #         "id": row[0],              #  id add kar diya
         #         "head_name": row[1],
         #         "head_code": row[2],
         #         "ob": row[3],
