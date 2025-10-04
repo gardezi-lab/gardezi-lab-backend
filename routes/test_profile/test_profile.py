@@ -112,44 +112,42 @@ def create_test_profile():
         if not all(required_fields):
             return jsonify({"error": "All required fields must be provided"}), 400
 
-        #  Insert into DB
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
 
+        #  Check if test_code already exists
+        check_query = "SELECT id FROM test_profiles WHERE test_code = %s"
+        cursor.execute(check_query, (test_code,))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.close()
+            return jsonify({
+                "error": f"Test code '{test_code}' already exists. Please choose a different test code."
+            }), 400
+
+        #  Insert into DB
         insert_query = """
             INSERT INTO test_profiles 
             (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation, unit_ref_range, test_formate) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-
         cursor.execute(insert_query, (
             test_name, test_code, sample_required, select_header, fee, delivery_time,
             serology_elisa, interpretation, unit_ref_range, test_formate
         ))
         mysql.connection.commit()
-
-        new_id = cursor.lastrowid
         cursor.close()
 
         # Response
         return jsonify({
             "message": "Test Profile created successfully",
-            "status": 201,
-            # "id": new_id,
-            # "test_name": test_name,
-            # "test_code": test_code,
-            # "sample_required": sample_required,
-            # "select_header": select_header,
-            # "fee": fee,
-            # "delivery_time": delivery_time,
-            # "serology_elisa": serology_elisa,
-            # "unit_ref_range": unit_ref_range,
-            # "test_formate": test_formate,
-            # "interpretation": interpretation
+            "status": 201
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 
