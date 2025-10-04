@@ -111,11 +111,11 @@ def update_department(id):
             return jsonify({"error": "Department name cannot be a number"}), 400
         #check if department is already exists
         cursor = mysql.connection.cursor() # type: ignore
-        cursor.execute("SELECT * FROM departments WHERE department=%s", (department,))
+        cursor.execute("SELECT * FROM departments WHERE department=%s", (department_name,))
         existing_department = cursor.fetchone()
         if existing_department:
             return jsonify({"error": "Department already exists"}), 400
-        cursor.execute("UPDATE departments SET department=%s WHERE id=%s", (department, id))
+        cursor.execute("UPDATE departments SET department=%s WHERE id=%s", (department_name, id))
         mysql.connection.commit() # type: ignore
         cursor.close()
         return jsonify({"message": "Department updated successfully",
