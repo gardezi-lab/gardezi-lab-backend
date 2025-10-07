@@ -26,32 +26,85 @@ def create_patient_entry():
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
-        test = data.get('test')
+        test_string = data.get('test')  # e.g. "Complete Blood Count, LFT"
 
-        if not all([cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test]):
+        if not all([cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test_string]):
             return jsonify({"error": "All fields are required"}), 400
 
         if not isinstance(age, int):
             return jsonify({"error": "age must be integer"}), 400
 
+        # Split tests into list
+        test_names = [t.strip() for t in test_string.split(",") if t.strip()]
+
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(DictCursor)
+
+        #  Calculate total fee from test_profiles
+        format_strings = ','.join(['%s'] * len(test_names))
+        cursor.execute(f"SELECT id, test_name, fee FROM test_profiles WHERE test_name IN ({format_strings})", test_names)
+        test_rows = cursor.fetchall()
+
+        total_fee = sum(int(row['fee']) for row in test_rows)
+
+        #  Insert patient entry
         insert_query = """
-            INSERT INTO patient_entry (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
+            INSERT INTO patient_entry 
+            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test))
+        cursor.execute(insert_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test_string))
+        patient_id = cursor.lastrowid
+
+        #  Insert each test in patient_tests
+        for row in test_rows:
+            cursor.execute(
+                "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
+                (patient_id, row['id'])
+            )
+
         mysql.connection.commit()
-        new_id = cursor.lastrowid
         cursor.close()
 
         return jsonify({
             "message": "Patient entry created successfully",
-            "id": new_id
+            "patient_id": patient_id,
+            "tests_added": [row['test_name'] for row in test_rows],
+            "total_fee": total_fee
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+#------------------- Patient Test GET -----------------------------------------
+@patient_entry_bp.route('/<int:patient_id>/tests', methods=['GET'])
+def get_patient_tests(patient_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+
+        query = """
+            SELECT t.test_name
+            FROM patient_tests pt
+            JOIN test_profiles t ON pt.test_id = t.id
+            WHERE pt.patient_id = %s
+        """
+        cursor.execute(query, (patient_id,))
+        results = cursor.fetchall()
+        cursor.close()
+
+        test_list = [row[0] for row in results]
+
+        return jsonify({
+            "patient_id": patient_id,
+            "total_tests": len(test_list),
+            "tests": test_list
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
