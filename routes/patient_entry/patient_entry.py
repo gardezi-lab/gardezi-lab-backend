@@ -2,6 +2,7 @@ import math
 from flask import Flask, request, jsonify, Blueprint, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
+from datetime import datetime
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
 mysql = MySQL()
@@ -9,6 +10,8 @@ mysql = MySQL()
 # ================== Patient Entry CRUD Operations ================== #
 
 # ------------------- Create Patient Entry ------------------ #
+
+
 @patient_entry_bp.route('/', methods=['POST'])
 def create_patient_entry():
     try:
@@ -47,7 +50,7 @@ def create_patient_entry():
 
         total_fee = sum(int(row['fee']) for row in test_rows)
 
-        #  Insert patient entry
+        # 🟡 Insert patient entry
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
@@ -56,12 +59,26 @@ def create_patient_entry():
         cursor.execute(insert_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test_string))
         patient_id = cursor.lastrowid
 
-        #  Insert each test in patient_tests
+        # 🟡 Insert each test in patient_tests table
         for row in test_rows:
             cursor.execute(
                 "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
                 (patient_id, row['id'])
             )
+
+        # 🟢 Insert into result table
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        result_insert_query = """
+            INSERT INTO results (name, mr, date, add_results, sample)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(result_insert_query, (
+            patient_name,
+            father_hasband_MR,
+            current_date,
+            "",  # add_results initially empty
+            sample
+        ))
 
         mysql.connection.commit()
         cursor.close()
@@ -105,7 +122,7 @@ def get_patient_tests(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+ 
 
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
