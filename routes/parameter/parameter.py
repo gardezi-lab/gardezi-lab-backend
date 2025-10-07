@@ -62,6 +62,34 @@ def get_all_parameters():
         return jsonify({"error": str(e)}), 500
 
 
+#---------------------- GET By Test_profile_id ------------------
+@parameter_bp.route('/<int:test_profile_id>', methods=['GET'])
+def get_test_profile_id(test_profile_id):
+    try:
+        cursor = mysql.connection.cursor()
+        query = "SELECT * FROM parameters WHERE test_profile_id = %s"
+        cursor.execute(query, (test_profile_id,))
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result:
+            return jsonify({
+                "id": result[0],
+                "parameter_name": result[1],
+                "sub_heading": result[2],
+                "input_type": result[3],
+                "unit": result[4],
+                "normal_value": result[5],
+                "default_value": result[6],
+                "status": 200
+            })
+        else:
+            return jsonify({"message": "No parameter found", "status": 404})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 # --------------------- Get parameter by ID --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
 def get_parameter(parameter_id):
