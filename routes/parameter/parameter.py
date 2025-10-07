@@ -90,36 +90,54 @@ def get_parameter(parameter_id):
 
 
 # --------------------- Create a new parameter --------------------- #
-@parameter_bp.route('/', methods=['POST'])
-def create_parameter():
+# ------------------ Create Parameter (URL-based) ------------------ #
+@parameter_bp.route('/<int:test_profile_id>', methods=['POST'])
+def create_parameter(test_profile_id):
     try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+
         data = request.get_json()
+
         parameter_name = data.get("parameter_name")
         sub_heading = data.get("sub_heading")
         input_type = data.get("input_type")
         unit = data.get("unit")
         normalvalue = data.get("normalvalue")
         default_value = data.get("default_value")
+    
+        # 1️⃣ Check if test_profile_id exists in test_profiles table
+        cursor.execute("SELECT id FROM test_profiles WHERE id = %s", (test_profile_id,))
+        test_exists = cursor.fetchone()
+        if not test_exists:
+            return jsonify({"error": "Invalid test_profile_id"}), 400
 
-        # all fields are mandatory
-        if not all([parameter_name, sub_heading, input_type, unit, normalvalue, default_value]):
-            return jsonify({"error": "All fields are required"}), 400
+        # 2️⃣ Check if any parameter already exists for this test_profile_id
+        cursor.execute("SELECT id FROM parameters WHERE test_profile_id = %s", (test_profile_id,))
+        existing_param = cursor.fetchone()
+        if existing_param:
+            return jsonify({
+                "error": f"Parameters for test_profile_id {test_profile_id} already exist. Please edit instead of adding again."
+            }), 400
 
-        # all fields must be strings
-        if not all(isinstance(f, str) for f in [parameter_name, sub_heading, input_type, unit, normalvalue, default_value]):
-            return jsonify({"error": "All fields must be strings"}), 400
-
-        mysql = current_app.mysql
-        cur = mysql.connection.cursor()
-        cur.execute(
-            "INSERT INTO parameters (parameter_name, sub_heading, input_type, unit, normalvalue, default_value) VALUES (%s, %s, %s, %s, %s, %s)",
-            (parameter_name, sub_heading, input_type, unit, normalvalue, default_value)
-        )
+        #  Insert new parameter
+        insert_query = """
+            INSERT INTO parameters (
+                parameter_name, sub_heading, input_type, unit,
+                normalvalue, default_value, test_profile_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (
+            parameter_name, sub_heading, input_type, unit,
+            normalvalue, default_value, test_profile_id
+        ))
         mysql.connection.commit()
-        cur.close()
-        return jsonify({"message": "Parameter created successfully",
-                        "status" : 201}), 201
+
+        return jsonify({"message": "Parameter added successfully"}), 201
+
     except Exception as e:
+        print(e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -133,30 +151,45 @@ def update_parameter(parameter_id):
         sub_heading = data.get("sub_heading")
         input_type = data.get("input_type")
         unit = data.get("unit")
-        normal_value = data.get("normal_value") or data.get("normalvalue")
+        normalvalue = data.get("normalvalue") or data.get("normal_value")  #  handle both
         default_value = data.get("default_value")
 
-        # Check if all fields are provided
-        if not all([parameter_name, sub_heading, input_type, unit, normal_value, default_value]):
+        # Validation: all fields required
+        if not all([parameter_name, sub_heading, input_type, unit, normalvalue, default_value]):
             return jsonify({"error": "All fields are required"}), 400
 
-        if not all(isinstance(f, str) for f in [parameter_name, sub_heading, input_type, unit, normal_value, default_value]):
+        # All must be strings
+        if not all(isinstance(f, str) for f in [parameter_name, sub_heading, input_type, unit, normalvalue, default_value]):
             return jsonify({"error": "All fields must be strings"}), 400
 
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
-        cur.execute("""
+
+        #  Check if parameter exists
+        cur.execute("SELECT id FROM parameters WHERE id = %s", (parameter_id,))
+        if not cur.fetchone():
+            return jsonify({"error": f"Parameter with ID {parameter_id} not found"}), 404
+
+        #  Update query
+        update_query = """
             UPDATE parameters 
             SET parameter_name=%s, sub_heading=%s, input_type=%s, unit=%s, normalvalue=%s, default_value=%s 
             WHERE id=%s
-        """, (parameter_name, sub_heading, input_type, unit, normal_value, default_value, parameter_id))
+        """
+        cur.execute(update_query, (
+            parameter_name, sub_heading, input_type, unit, normalvalue, default_value, parameter_id
+        ))
+
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Parameter updated successfully","status" : 200}), 200
+        return jsonify({"message": "Parameter updated successfully", "status": 200}), 200
 
     except Exception as e:
+        mysql = current_app.mysql
+        mysql.connection.rollback()   
         return jsonify({"error": str(e)}), 500
+
 
 
 # --------------------- Delete a parameter --------------------- #
