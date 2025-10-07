@@ -2,6 +2,7 @@ import math
 from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
+import MySQLdb
 
 parameter_bp = Blueprint('parameter', __name__, url_prefix='/api/parameter')
 mysql = MySQL()
@@ -64,30 +65,39 @@ def get_all_parameters():
 
 #---------------------- GET By Test_profile_id ------------------
 @parameter_bp.route('/<int:test_profile_id>', methods=['GET'])
-def get_test_profile_id(test_profile_id):
+def get_parameters_by_test_profile(test_profile_id):
     try:
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  #  DictCursor use karo
         query = "SELECT * FROM parameters WHERE test_profile_id = %s"
         cursor.execute(query, (test_profile_id,))
-        result = cursor.fetchone()
+        rows = cursor.fetchall()
         cursor.close()
 
-        if result:
-            return jsonify({
-                "id": result[0],
-                "parameter_name": result[1],
-                "sub_heading": result[2],
-                "input_type": result[3],
-                "unit": result[4],
-                "normal_value": result[5],
-                "default_value": result[6],
-                "status": 200
+        if not rows:
+            return jsonify({"message": "No parameters found", "status": 404}), 404
+
+        # List of parameter objects
+        parameters = []
+        for row in rows:
+            parameters.append({
+                "id": row["id"],
+                "parameter_name": row["parameter_name"],
+                "sub_heading": row["sub_heading"],
+                "input_type": row["input_type"],
+                "unit": row["unit"],
+                "normalvalue": row["normalvalue"],
+                "default_value": row["default_value"]
             })
-        else:
-            return jsonify({"message": "No parameter found", "status": 404})
+
+        return jsonify({
+            "data": parameters,
+            "total": len(parameters),
+            "status": 200
+        }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
+
 
 
 # --------------------- Get parameter by ID --------------------- #
@@ -134,18 +144,18 @@ def create_parameter(test_profile_id):
         normalvalue = data.get("normalvalue")
         default_value = data.get("default_value")
     
-        # 1️⃣ Check if test_profile_id exists in test_profiles table
+        #  Check if test_profile_id exists in test_profiles table
         cursor.execute("SELECT id FROM test_profiles WHERE id = %s", (test_profile_id,))
         test_exists = cursor.fetchone()
         if not test_exists:
             return jsonify({"error": "Invalid test_profile_id"}), 400
 
         # 2️⃣ Check if any parameter already exists for this test_profile_id
-        cursor.execute("SELECT id FROM parameters WHERE test_profile_id = %s", (test_profile_id,))
+        cursor.execute("SELECT parameter_name FROM parameters WHERE parameter_name = %s", (parameter_name,))
         existing_param = cursor.fetchone()
         if existing_param:
             return jsonify({
-                "error": f"Parameters for test_profile_id {test_profile_id} already exist. Please edit instead of adding again."
+                "error": f"Parameters for test_profile_id  already exist. Please edit instead of adding again."
             }), 400
 
         #  Insert new parameter
