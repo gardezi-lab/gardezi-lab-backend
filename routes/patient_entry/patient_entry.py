@@ -50,7 +50,7 @@ def create_patient_entry():
 
         total_fee = sum(int(row['fee']) for row in test_rows)
 
-        # 🟡 Insert patient entry
+        #  Insert patient entry
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
@@ -59,14 +59,14 @@ def create_patient_entry():
         cursor.execute(insert_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test_string))
         patient_id = cursor.lastrowid
 
-        # 🟡 Insert each test in patient_tests table
+        #  Insert each test in patient_tests table
         for row in test_rows:
             cursor.execute(
                 "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
                 (patient_id, row['id'])
             )
 
-        # 🟢 Insert into result table
+        #  Insert into result table
         current_date = datetime.now().strftime('%Y-%m-%d')
         result_insert_query = """
             INSERT INTO results (name, mr, date, add_results, sample)
