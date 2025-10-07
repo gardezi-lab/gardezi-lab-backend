@@ -128,7 +128,7 @@ def get_parameter(parameter_id):
 
 
 # --------------------- Create a new parameter --------------------- #
-# ------------------ Create Parameter (URL-based) ------------------ #
+
 @parameter_bp.route('/<int:test_profile_id>', methods=['POST'])
 def create_parameter(test_profile_id):
     try:
@@ -158,7 +158,7 @@ def create_parameter(test_profile_id):
                 "error": f"Parameters for test_profile_id  already exist. Please edit instead of adding again."
             }), 400
 
-        #  Insert new parameter
+        # Insert new parameter
         insert_query = """
             INSERT INTO parameters (
                 parameter_name, sub_heading, input_type, unit,

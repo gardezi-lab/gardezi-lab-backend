@@ -95,14 +95,14 @@ def create_patient_entry():
 
 
 #------------------- Patient Test GET -----------------------------------------
-@patient_entry_bp.route('/<int:patient_id>/tests', methods=['GET'])
+@patient_entry_bp.route('/tests_result/<int:patient_id>', methods=['GET'])
 def get_patient_tests(patient_id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
 
         query = """
-            SELECT t.test_name
+            SELECT DISTINCT t.test_name
             FROM patient_tests pt
             JOIN test_profiles t ON pt.test_id = t.id
             WHERE pt.patient_id = %s
@@ -111,7 +111,9 @@ def get_patient_tests(patient_id):
         results = cursor.fetchall()
         cursor.close()
 
-        test_list = [row[0] for row in results]
+        test_list = [
+            {"test_name": row[0]} for row in results
+        ]
 
         return jsonify({
             "patient_id": patient_id,
@@ -121,6 +123,7 @@ def get_patient_tests(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
  
 
