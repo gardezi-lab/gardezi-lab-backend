@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, Blueprint, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
 from datetime import datetime
+import MySQLdb
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
 mysql = MySQL()
@@ -11,7 +12,6 @@ mysql = MySQL()
 
 # ------------------- Create Patient Entry ------------------ #
 
-
 @patient_entry_bp.route('/', methods=['POST'])
 def create_patient_entry():
     try:
@@ -19,7 +19,7 @@ def create_patient_entry():
         cell = data.get('cell')
         patient_name = data.get('patient_name')
         father_hasband_MR = data.get('father_hasband_MR')
-        age = data.get('age')
+        age = str(data.get('age'))
         company = data.get('company')
         reffered_by = data.get('reffered_by')
         gender = data.get('gender')
@@ -31,102 +31,89 @@ def create_patient_entry():
         remarks = data.get('remarks')
         test_string = data.get('test')  # e.g. "Complete Blood Count, LFT"
 
-        if not all([cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test_string]):
-            return jsonify({"error": "All fields are required"}), 400
+        # --- Validations ---
+        if not patient_name or not patient_name.strip():
+            return jsonify({"error": "Patient name is required"}), 400
 
-        if not isinstance(age, int):
-            return jsonify({"error": "age must be integer"}), 400
+        if not cell or not cell.isdigit() or len(cell) != 11:
+            return jsonify({"error": "Cell must be an 11-digit number"}), 400
 
-        # Split tests into list
+        if not reffered_by or not reffered_by.strip():
+            return jsonify({"error": "Referred By is required"}), 400
+
+        if not test_string or not test_string.strip():
+            return jsonify({"error": "At least one test is required"}), 400
+
+        # --- Split test names ---
         test_names = [t.strip() for t in test_string.split(",") if t.strip()]
 
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        #  Calculate total fee from test_profiles
-        format_strings = ','.join(['%s'] * len(test_names))
-        cursor.execute(f"SELECT id, test_name, fee FROM test_profiles WHERE test_name IN ({format_strings})", test_names)
-        test_rows = cursor.fetchall()
+        tests_list = []
+        total_fee = 0
 
-        total_fee = sum(int(row['fee']) for row in test_rows)
-
-        #  Insert patient entry
+        # --- Insert patient entry ---
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test_string))
+        cursor.execute(insert_query, (
+            cell, patient_name, father_hasband_MR, age, company, reffered_by,
+            gender, email, address, package, sample, priority, remarks, test_string
+        ))
         patient_id = cursor.lastrowid
 
-        #  Insert each test in patient_tests table
-        for row in test_rows:
+        # --- Insert patient_tests ---
+        for test_name in test_names:
             cursor.execute(
-                "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
-                (patient_id, row['id'])
+                "SELECT id, test_name, fee FROM test_profiles WHERE test_name = %s LIMIT 1",
+                (test_name,)
             )
+            row = cursor.fetchone()
+            if row:
+                fee = int(row['fee']) if row['fee'] else 0
 
-        #  Insert into result table
+                # Patient test insert
+                cursor.execute(
+                    "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
+                    (patient_id, row['id'])
+                )
+                patient_test_id = cursor.lastrowid  # 👈 get the inserted patient_test_id
+
+                tests_list.append({
+                    "patient_test_id": patient_test_id,   # 👈 now included in response
+                    "test_name": row['test_name'],
+                    "fee": fee
+                })
+                total_fee += fee
+            else:
+                tests_list.append({
+                    "test_name": test_name,
+                    "fee": "Not Found"
+                })
+
+        # --- Insert into results ---
         current_date = datetime.now().strftime('%Y-%m-%d')
-        result_insert_query = """
-            INSERT INTO results (name, mr, date, add_results, sample)
-            VALUES (%s, %s, %s, %s, %s)
-        """
-        cursor.execute(result_insert_query, (
-            patient_name,
-            father_hasband_MR,
-            current_date,
-            "",  # add_results initially empty
-            sample
-        ))
+        cursor.execute(
+            "INSERT INTO results (name, mr, date, add_results, sample) VALUES (%s, %s, %s, %s, %s)",
+            (patient_name, father_hasband_MR, current_date, "", sample)
+        )
 
         mysql.connection.commit()
         cursor.close()
 
+        #  Final response
         return jsonify({
             "message": "Patient entry created successfully",
             "patient_id": patient_id,
-            "tests_added": [row['test_name'] for row in test_rows],
+            "tests": tests_list,
             "total_fee": total_fee
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-#------------------- Patient Test GET -----------------------------------------
-@patient_entry_bp.route('/tests_result/<int:patient_id>', methods=['GET'])
-def get_patient_tests(patient_id):
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
-
-        query = """
-            SELECT DISTINCT t.test_name
-            FROM patient_tests pt
-            JOIN test_profiles t ON pt.test_id = t.id
-            WHERE pt.patient_id = %s
-        """
-        cursor.execute(query, (patient_id,))
-        results = cursor.fetchall()
-        cursor.close()
-
-        test_list = [
-            {"test_name": row[0]} for row in results
-        ]
-
-        return jsonify({
-            "patient_id": patient_id,
-            "total_tests": len(test_list),
-            "tests": test_list
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
- 
-
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
 def get_all_patient_entries():
@@ -267,5 +254,49 @@ def delete_patient_entry(id):
         cursor.close()
         return jsonify({"message": "Patient entry deleted successfully",
                         "status" : 200}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#-------------------------Test Verify ---------------------------------
+@patient_entry_bp.route('/verify_test/<int:patient_test_id>', methods=['PATCH'])
+def verify_test(patient_test_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+
+        update_query = """
+            UPDATE patient_tests
+            SET status = 'verified'
+            WHERE id = %s
+        """
+        cursor.execute(update_query, (patient_test_id,))
+        mysql.connection.commit()
+        cursor.close()
+
+        return jsonify({"message": "Test verified successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#------------------------------- GET Unverifyed data --------------------
+@patient_entry_bp.route('/unverified_tests', methods=['GET'])
+def get_unverified_tests():
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        # Optional: filter by patient_id
+        patient_id = request.args.get('patient_id')
+
+        if patient_id:
+            query = "SELECT * FROM patient_tests WHERE patient_id = %s AND status = 'unverified'"
+            cursor.execute(query, (patient_id,))
+        else:
+            query = "SELECT * FROM patient_tests WHERE status = 'unverified'"
+            cursor.execute(query)
+
+        results = cursor.fetchall()
+        cursor.close()
+
+        return jsonify(results), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -84,7 +84,10 @@ def create_test_profile():
     try:
         data = request.get_json()
 
-        #  Basic string fields
+        if not data:
+            return jsonify({"error": "Request body must be JSON"}), 400
+
+        #  Basic required fields
         test_name = data.get("test_name")
         test_code = data.get("test_code")
         sample_required = data.get("sample_required")
@@ -93,7 +96,21 @@ def create_test_profile():
         delivery_time = data.get("delivery_time")
         interpretation = data.get("interpretation")
 
-        #  Boolean fields conversion function
+        #  Required fields validation
+        required_fields = {
+            "test_name": test_name,
+            "test_code": test_code,
+            "sample_required": sample_required,
+            "select_header": select_header,
+            "fee": fee,
+            "delivery_time": delivery_time
+        }
+
+        for field_name, value in required_fields.items():
+            if value is None or (isinstance(value, str) and value.strip() == ""):
+                return jsonify({"error": f"Field '{field_name}' is required"}), 400
+
+        #  Boolean fields validation
         def to_bool(val):
             if isinstance(val, bool):
                 return val
@@ -103,33 +120,25 @@ def create_test_profile():
                 return val == 1
             return False
 
+        if data.get("serology_elisa") is None:
+            return jsonify({"error": "Field 'serology_elisa' is required"}), 400
+        if data.get("unit_ref_range") is None:
+            return jsonify({"error": "Field 'unit_ref_range' is required"}), 400
+        if data.get("test_formate") is None:
+            return jsonify({"error": "Field 'test_formate' is required"}), 400
+
         serology_elisa = to_bool(data.get("serology_elisa"))
         unit_ref_range = to_bool(data.get("unit_ref_range"))
         test_formate = to_bool(data.get("test_formate"))
 
-        #  Validation
-        required_fields = [test_name, test_code, sample_required, select_header, fee, delivery_time, interpretation]
-        if not all(required_fields):
-            return jsonify({"error": "All required fields must be provided"}), 400
-
+        #  Insert into DB
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
 
-        #  Check if test_code already exists
-        check_query = "SELECT id FROM test_profiles WHERE test_code = %s"
-        cursor.execute(check_query, (test_code,))
-        existing = cursor.fetchone()
-
-        if existing:
-            cursor.close()
-            return jsonify({
-                "error": f"Test code '{test_code}' already exists. Please choose a different test code."
-            }), 400
-
-        #  Insert into DB
         insert_query = """
             INSERT INTO test_profiles 
-            (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation, unit_ref_range, test_formate) 
+            (test_name, test_code, sample_required, select_header, fee, delivery_time, 
+             serology_elisa, interpretation, unit_ref_range, test_formate) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
@@ -139,7 +148,6 @@ def create_test_profile():
         mysql.connection.commit()
         cursor.close()
 
-        # Response
         return jsonify({
             "message": "Test Profile created successfully",
             "status": 201
@@ -149,6 +157,38 @@ def create_test_profile():
         return jsonify({"error": str(e)}), 500
 
 
+#---------------------- api for unique test code ------------------
+@test_profile_bp.route('/check_test_code', methods=['POST'])
+def check_test_code():
+    try:
+        data = request.get_json()
+        test_code = data.get("test_code")
+
+        if not test_code:
+            return jsonify({"error": "test_code is required"}), 400
+
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+
+        # check if test_code exists
+        query = "SELECT id FROM test_profiles WHERE test_code = %s"
+        cursor.execute(query, (test_code,))
+        existing = cursor.fetchone()
+        cursor.close()
+
+        if existing:
+            return jsonify({
+                "unique": False,
+                "message": f"Test code '{test_code}' already exists."
+            }), 200
+        else:
+            return jsonify({
+                "unique": True,
+                "message": f"Test code '{test_code}' is available."
+            }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # --------------------- Update a test profile --------------------- #
