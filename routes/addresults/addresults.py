@@ -177,4 +177,58 @@ def delete_result(result_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+# -------------------- Get only pending results (no add_results) -------------------- #
+@results_bp.route('/pending', methods=['GET'])
+def get_pending_results():
+    try:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        # Optional search & pagination
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+        offset = (current_page - 1) * record_per_page
+
+        base_query = "SELECT * FROM results WHERE (add_results IS NULL OR add_results = '')"
+        values = []
+
+        if search:
+            base_query += " AND (name LIKE %s OR mr LIKE %s OR sample LIKE %s)"
+            values.extend([f"%{search}%"] * 3)
+
+        # Count total pending
+        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
+        cursor.execute(count_query, values)
+        total_records = cursor.fetchone()["total"]
+
+        # Apply pagination
+        base_query += " LIMIT %s OFFSET %s"
+        values.extend([record_per_page, offset])
+
+        cursor.execute(base_query, values)
+        pending_results = cursor.fetchall()
+        cursor.close()
+
+        formatted = [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "mr": r["mr"],
+                "date": r["date"].strftime("%Y-%m-%d") if r["date"] else None,
+                "add_results": r["add_results"],
+                "sample": r["sample"]
+            }
+            for r in pending_results
+        ]
+
+        total_pages = math.ceil(total_records / record_per_page)
+
+        return jsonify({
+            "data": formatted,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
