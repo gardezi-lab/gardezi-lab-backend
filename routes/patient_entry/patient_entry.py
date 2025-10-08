@@ -19,7 +19,7 @@ def create_patient_entry():
         cell = data.get('cell')
         patient_name = data.get('patient_name')
         father_hasband_MR = data.get('father_hasband_MR')
-        age = str(data.get('age'))
+        age = data.get('age')
         company = data.get('company')
         reffered_by = data.get('reffered_by')
         gender = data.get('gender')
@@ -29,67 +29,77 @@ def create_patient_entry():
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
-        test_string = data.get('test')  # e.g. "Complete Blood Count, LFT"
+        tests = data.get('test', [])  # list of {"name": ..., "fee": ...}
 
-        # --- Validations ---
-        if not patient_name or not patient_name.strip():
-            return jsonify({"error": "Patient name is required"}), 400
-
+        # --- Validations for required fields ---
+        errors = []
         if not cell or not cell.isdigit() or len(cell) != 11:
-            return jsonify({"error": "Cell must be an 11-digit number"}), 400
+            errors.append("Cell is required and must be 11 digits.")
+        if not patient_name or not str(patient_name).strip():
+            errors.append("Patient name is required.")
+        if age is None:
+            errors.append("Age is required.")
+        if not gender or not str(gender).strip():
+            errors.append("Gender is required.")
+        if not sample or not str(sample).strip():
+            errors.append("Sample is required.")
+        if not reffered_by or not str(reffered_by).strip():
+            errors.append("Referred By is required.")
+        if not tests or not isinstance(tests, list) or len(tests) == 0:
+            errors.append("At least one test is required.")
 
-        if not reffered_by or not reffered_by.strip():
-            return jsonify({"error": "Referred By is required"}), 400
+        if errors:
+            return jsonify({"errors": errors}), 400
 
-        if not test_string or not test_string.strip():
-            return jsonify({"error": "At least one test is required"}), 400
-
-        # --- Split test names ---
-        test_names = [t.strip() for t in test_string.split(",") if t.strip()]
+        # Convert age to string
+        age = str(age)
 
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        tests_list = []
         total_fee = 0
+        tests_list = []
 
         # --- Insert patient entry ---
         insert_query = """
             INSERT INTO patient_entry 
-            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             cell, patient_name, father_hasband_MR, age, company, reffered_by,
-            gender, email, address, package, sample, priority, remarks, test_string
+            gender, email, address, package, sample, priority, remarks
         ))
         patient_id = cursor.lastrowid
 
         # --- Insert patient_tests ---
-        for test_name in test_names:
+        for test_obj in tests:
+            test_name = test_obj.get("name")
+            fee = int(test_obj.get("fee", 0))
+
+            # Get test_id from test_profiles
             cursor.execute(
-                "SELECT id, test_name, fee FROM test_profiles WHERE test_name = %s LIMIT 1",
+                "SELECT id FROM test_profiles WHERE test_name = %s LIMIT 1",
                 (test_name,)
             )
             row = cursor.fetchone()
-            if row:
-                fee = int(row['fee']) if row['fee'] else 0
+            test_id = row['id'] if row else None
 
-                # Patient test insert
+            if test_id:
                 cursor.execute(
                     "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
-                    (patient_id, row['id'])
+                    (patient_id, test_id)
                 )
-                patient_test_id = cursor.lastrowid  # 👈 get the inserted patient_test_id
-
+                patient_test_id = cursor.lastrowid
                 tests_list.append({
-                    "patient_test_id": patient_test_id,   # 👈 now included in response
-                    "test_name": row['test_name'],
+                    "patient_test_id": patient_test_id,
+                    "test_name": test_name,
                     "fee": fee
                 })
                 total_fee += fee
             else:
                 tests_list.append({
+                    "patient_test_id": None,
                     "test_name": test_name,
                     "fee": "Not Found"
                 })
@@ -104,7 +114,6 @@ def create_patient_entry():
         mysql.connection.commit()
         cursor.close()
 
-        #  Final response
         return jsonify({
             "message": "Patient entry created successfully",
             "patient_id": patient_id,
@@ -114,6 +123,98 @@ def create_patient_entry():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+#-------------------- GET selected test of patient by patient_id test-----------------------
+@patient_entry_bp.route('/tests/<int:patient_id>', methods=['GET'])
+def get_patient_tests(patient_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+        # Get all tests for this patient
+        query = """
+            SELECT pt.id AS patient_test_id, tp.test_name, tp.fee
+            FROM patient_tests pt
+            LEFT JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE pt.patient_id = %s
+        """
+        cursor.execute(query, (patient_id,))
+        rows = cursor.fetchall()
+
+        tests_list = []
+        total_fee = 0
+
+        for row in rows:
+            # Convert fee to integer if it exists, else mark as Not Found
+            if row['fee'] is not None:
+                fee = int(row['fee'])
+                total_fee += fee
+            else:
+                fee = "Not Found"
+
+            tests_list.append({
+                "patient_test_id": row['patient_test_id'],
+                "test_name": row['test_name'] if row['test_name'] else "Not Found",
+                "fee": fee
+            })
+
+        cursor.close()
+
+        return jsonify({
+            "patient_id": patient_id,
+            "tests": tests_list,
+            "total_fee": total_fee
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#-----------------------GET Patient Selected test paramters py patient_id-----------
+@patient_entry_bp.route('/patient_tests/<int:patient_id>', methods=['GET'])
+def get_patient_tests_with_parameters(patient_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+        # --- Get all tests for this patient ---
+        cursor.execute("""
+            SELECT pt.id AS patient_test_id, tp.test_name, tp.fee, tp.id AS test_id
+            FROM patient_tests pt
+            JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE pt.patient_id = %s
+        """, (patient_id,))
+        tests = cursor.fetchall()
+
+        result = []
+
+        # --- For each test, get its parameters ---
+        for test in tests:
+            test_id = test['test_id']
+            cursor.execute("""
+                SELECT *
+                FROM parameters
+                WHERE test_profile_id = %s
+            """, (test_id,))
+            parameters = cursor.fetchall()
+
+            result.append({
+                "patient_test_id": test['patient_test_id'],
+                "test_name": test['test_name'],
+                "fee": test['fee'],
+                "parameters": parameters
+            })
+
+        cursor.close()
+
+        return jsonify({
+            "patient_id": patient_id,
+            "tests": result
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
 def get_all_patient_entries():
