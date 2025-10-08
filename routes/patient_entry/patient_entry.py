@@ -4,6 +4,7 @@ from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
 from datetime import datetime
 import MySQLdb
+import json
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
 mysql = MySQL()
@@ -29,7 +30,7 @@ def create_patient_entry():
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
-        tests = data.get('test', [])  # list of {"name": ..., "fee": ...}
+        test = data.get('test', [])  # list of {"name": ..., "fee": ...}
 
         # --- Validations for required fields ---
         errors = []
@@ -45,8 +46,8 @@ def create_patient_entry():
             errors.append("Sample is required.")
         if not reffered_by or not str(reffered_by).strip():
             errors.append("Referred By is required.")
-        if not tests or not isinstance(tests, list) or len(tests) == 0:
-            errors.append("At least one test is required.")
+        # if not tests or not isinstance(tests, list) or len(tests) == 0:
+        #     errors.append("At least one test is required.")
 
         if errors:
             return jsonify({"errors": errors}), 400
@@ -59,21 +60,21 @@ def create_patient_entry():
 
         total_fee = 0
         tests_list = []
-
+        test_json = json.dumps(test)
         # --- Insert patient entry ---
         insert_query = """
             INSERT INTO patient_entry 
-            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks,test)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             cell, patient_name, father_hasband_MR, age, company, reffered_by,
-            gender, email, address, package, sample, priority, remarks
+            gender, email, address, package, sample, priority, remarks, test_json
         ))
         patient_id = cursor.lastrowid
-
+        print("patient_id",patient_id)
         # --- Insert patient_tests ---
-        for test_obj in tests:
+        for test_obj in test:
             test_name = test_obj.get("name")
             fee = int(test_obj.get("fee", 0))
 
@@ -116,9 +117,7 @@ def create_patient_entry():
 
         return jsonify({
             "message": "Patient entry created successfully",
-            "patient_id": patient_id,
-            "tests": tests_list,
-            "total_fee": total_fee
+            
         }), 201
 
     except Exception as e:
