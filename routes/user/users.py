@@ -74,7 +74,12 @@ def get_users():
         offset = (current_page - 1) * record_per_page
 
         # base query
-        base_query = "SELECT id, name, contact_no, user_name, password, role, age FROM users"
+        base_query = """
+SELECT id, name, contact_no, user_name, password, role, age
+FROM users
+WHERE role = 'Doctor'
+"""
+
         where_clauses = []
         values = []
 

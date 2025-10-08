@@ -87,30 +87,29 @@ def create_test_profile():
         if not data:
             return jsonify({"error": "Request body must be JSON"}), 400
 
-        #  Basic required fields
+        # --- Basic fields ---
         test_name = data.get("test_name")
+        fee = data.get("fee")
+        department_name = data.get("department_name")  # Required field
+
         test_code = data.get("test_code")
         sample_required = data.get("sample_required")
         select_header = data.get("select_header")
-        fee = data.get("fee")
         delivery_time = data.get("delivery_time")
         interpretation = data.get("interpretation")
 
-        #  Required fields validation
+        # --- Required fields validation ---
         required_fields = {
             "test_name": test_name,
-            "test_code": test_code,
-            "sample_required": sample_required,
-            "select_header": select_header,
             "fee": fee,
-            "delivery_time": delivery_time
+            "department_name": department_name
         }
 
         for field_name, value in required_fields.items():
             if value is None or (isinstance(value, str) and value.strip() == ""):
                 return jsonify({"error": f"Field '{field_name}' is required"}), 400
 
-        #  Boolean fields validation
+        # --- Boolean fields validation ---
         def to_bool(val):
             if isinstance(val, bool):
                 return val
@@ -131,19 +130,28 @@ def create_test_profile():
         unit_ref_range = to_bool(data.get("unit_ref_range"))
         test_formate = to_bool(data.get("test_formate"))
 
-        #  Insert into DB
+        # --- Database operations ---
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(DictCursor)
 
+        # Get department_id from departments table
+        cursor.execute("SELECT id FROM departments WHERE department_name = %s LIMIT 1", (department_name,))
+        dept_row = cursor.fetchone()
+        if dept_row:
+            department_id = dept_row['id']
+        else:
+            return jsonify({"error": f"Department '{department_name}' not found"}), 400
+
+        # --- Insert into test_profiles ---
         insert_query = """
             INSERT INTO test_profiles 
-            (test_name, test_code, sample_required, select_header, fee, delivery_time, 
-             serology_elisa, interpretation, unit_ref_range, test_formate) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (test_name, test_code, sample_required, select_header, fee, delivery_time,
+             serology_elisa, interpretation, unit_ref_range, test_formate, department_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             test_name, test_code, sample_required, select_header, fee, delivery_time,
-            serology_elisa, interpretation, unit_ref_range, test_formate
+            serology_elisa, interpretation, unit_ref_range, test_formate, department_id
         ))
         mysql.connection.commit()
         cursor.close()

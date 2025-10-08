@@ -1,7 +1,8 @@
 
 import math
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify,current_app
 from flask_mysqldb import MySQL
+from MySQLdb.cursors import DictCursor
 import MySQLdb
 
 results_bp = Blueprint('results', __name__, url_prefix='/api/results')
@@ -12,33 +13,149 @@ mysql = MySQL()
 def create_result():
     try:
         data = request.get_json()
+
+        # --- Basic result info ---
         name = data.get("name")
         mr = data.get("mr")
-        date = data.get("date")
-        add_results = data.get("add_results")
+        patient_id = data.get("patient_id")
+        date = data.get("date") or datetime.now().strftime('%Y-%m-%d')
+        add_results = data.get("add_results", "")
         sample = data.get("sample")
+        tests = data.get("tests", [])  # list of tests with parameters
 
-        if not name:
+        # --- Validations ---
+        if not name or not name.strip():
             return jsonify({"error": "Name is required"}), 400
+        if not mr or not mr.strip():
+            return jsonify({"error": "MR is required"}), 400
+        if not patient_id:
+            return jsonify({"error": "Patient ID is required"}), 400
+        if not sample or not sample.strip():
+            return jsonify({"error": "Sample is required"}), 400
 
+        mysql = current_app.mysql
         cursor = mysql.connection.cursor()
+
+        # --- Insert into results table ---
         cursor.execute(
-            "INSERT INTO results (name, mr, date, add_results, sample) VALUES (%s, %s, %s, %s, %s)",
-            (name, mr, date, add_results, sample)
+            "INSERT INTO results (name, mr, date, add_results, sample, patient_id) VALUES (%s, %s, %s, %s, %s, %s)",
+            (name, mr, date, add_results, sample, patient_id)
         )
+        result_id = cursor.lastrowid
+
+        # --- Insert parameter results ---
+        for test in tests:
+            patient_test_id = test.get("patient_test_id")
+            parameters = test.get("parameters", [])
+
+            for param in parameters:
+                parameter_id = param.get("id")
+                # Use provided result_value, fallback to default_value
+                result_value = param.get("result_value") or param.get("default_value", "")
+
+                if patient_test_id and parameter_id:
+                    cursor.execute(
+                        """
+                        INSERT INTO patient_results (patient_test_id, parameter_id, result_value)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (patient_test_id, parameter_id, result_value)
+                    )
+
         mysql.connection.commit()
-        new_id = cursor.lastrowid
         cursor.close()
 
         return jsonify({
             "message": "Result added successfully",
-            "id": new_id,
+            "result_id": result_id,
             "name": name,
             "mr": mr,
+            "patient_id": patient_id,
             "date": date,
             "add_results": add_results,
             "sample": sample
         }), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+#---------------------Get patient test result by patient id ----------------------
+
+from MySQLdb.cursors import DictCursor
+
+@results_bp.route('/patient/<int:patient_id>', methods=['GET'])
+def get_patient_results(patient_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+        query = """
+        SELECT 
+            r.id AS result_id,
+            r.name,
+            r.mr,
+            r.date,
+            r.add_results,
+            r.sample,
+            pt.id AS patient_test_id,
+            tp.test_name,
+            pr.parameter_id,
+            p.parameter_name,
+            p.unit,
+            p.normalvalue,
+            pr.result_value
+        FROM results r
+        JOIN patient_entry pe ON r.patient_id = pe.id
+        JOIN patient_tests pt ON pt.patient_id = pe.id
+        JOIN test_profiles tp ON tp.id = pt.test_id
+        LEFT JOIN patient_results pr ON pr.patient_test_id = pt.id
+        LEFT JOIN parameters p ON p.id = pr.parameter_id
+        WHERE r.patient_id = %s
+        ORDER BY r.date DESC, pt.id, p.id
+        """
+        cursor.execute(query, (patient_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+
+        # --- Transform rows to structured JSON ---
+        results_dict = {}
+        for row in rows:
+            result_id = row['result_id']
+            if result_id not in results_dict:
+                results_dict[result_id] = {
+                    "result_id": result_id,
+                    "patient_id": patient_id,
+                    "name": row['name'],
+                    "mr": row['mr'],
+                    "date": str(row['date']),
+                    "add_results": row['add_results'],
+                    "sample": row['sample'],
+                    "tests": {}
+                }
+
+            test_id = row['patient_test_id']
+            if test_id and test_id not in results_dict[result_id]['tests']:
+                results_dict[result_id]['tests'][test_id] = {
+                    "test_name": row['test_name'],
+                    "parameters": []
+                }
+
+            if row['parameter_id']:
+                results_dict[result_id]['tests'][test_id]['parameters'].append({
+                    "parameter_id": row['parameter_id'],
+                    "parameter_name": row['parameter_name'],
+                    "unit": row['unit'],
+                    "normalvalue": row['normalvalue'],
+                    "result_value": row['result_value']
+                })
+
+        # Convert tests dict to list
+        final_results = []
+        for r in results_dict.values():
+            r['tests'] = list(r['tests'].values())
+            final_results.append(r)
+
+        return jsonify(final_results), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
