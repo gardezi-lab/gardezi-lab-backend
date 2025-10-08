@@ -247,7 +247,7 @@ def search_parameter(parameter_name):
         return jsonify({"error": str(e)}), 500
 
 
-# --------------------------- GET  test  parameters by patient_test_id----------------------
+# --------------------------- GET  Selected test  parameters by patient_test_id----------------------
 @parameter_bp.route('/by_test/<int:patient_test_id>', methods=['GET'])
 def get_parameters_by_test(patient_test_id):
     try:
@@ -282,7 +282,7 @@ def get_parameters_by_test(patient_test_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#------------------------- Get Parameters by Test ID ----------------
+#------------------------- Get Selected Test  Parameters by test_profile_id  ----------------
 @parameter_bp.route('/by_profile/<int:test_profile_id>', methods=['GET'])
 def get_parameters_by_profile(test_profile_id):
     try:

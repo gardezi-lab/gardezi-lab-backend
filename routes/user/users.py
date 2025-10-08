@@ -2,6 +2,7 @@ import math, random, string
 from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
 from MySQLdb.cursors import DictCursor
+import MySQLdb
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 mysql = MySQL()
@@ -74,12 +75,7 @@ def get_users():
         offset = (current_page - 1) * record_per_page
 
         # base query
-        base_query = """
-SELECT id, name, contact_no, user_name, password, role, age
-FROM users
-WHERE role = 'Doctor'
-"""
-
+        base_query = "SELECT id, name, contact_no, user_name, password, role, age FROM users"
         where_clauses = []
         values = []
 
@@ -199,5 +195,36 @@ def datalist_role(role_name):
             return jsonify({"message": "No roles found"}), 404
 
         return jsonify(roles), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@users_bp.route('/doctors/', methods=['GET'])
+def get_doctors_only():
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  # ✅ DictCursor for JSON response
+
+        #  Sirf doctors ko fetch karna
+        query = """
+            SELECT 
+                id, 
+                name, 
+                contact_no, 
+                user_name, 
+                password, 
+                role, 
+                age 
+            FROM users 
+            WHERE role = 'Doctor'
+        """
+        cursor.execute(query)
+        doctors = cursor.fetchall()
+        cursor.close()
+
+        return jsonify({
+            "data": doctors,
+            "count": len(doctors)
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500

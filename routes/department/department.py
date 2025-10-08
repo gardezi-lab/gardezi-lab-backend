@@ -11,7 +11,7 @@ mysql = MySQL()
 def get_departments():
     try:
         mysql = current_app.mysql # type: ignore
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  # ✅ DictCursor use karo
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  #  DictCursor use karo
 
         # Query params from frontend
         search = request.args.get("search", "", type=str)
@@ -44,7 +44,7 @@ def get_departments():
         cursor.execute(base_query, values)
         departments = cursor.fetchall()
         #
-        # ✅ Transform data into custom format
+        #  Transform data into custom format
         formatted_departments = [
             {
                 "id": dept["id"],
