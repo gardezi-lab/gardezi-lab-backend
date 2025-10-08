@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
 import MySQLdb
-
+import datetime
 parameter_bp = Blueprint('parameter', __name__, url_prefix='/api/parameter')
 mysql = MySQL()
 
@@ -62,44 +62,6 @@ def get_all_parameters():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-#---------------------- GET By Test_profile_id ------------------
-@parameter_bp.route('/<int:test_profile_id>', methods=['GET'])
-def get_parameters_by_test_profile(test_profile_id):
-    try:
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  #  DictCursor use karo
-        query = "SELECT * FROM parameters WHERE test_profile_id = %s"
-        cursor.execute(query, (test_profile_id,))
-        rows = cursor.fetchall()
-        cursor.close()
-
-        if not rows:
-            return jsonify({"message": "No parameters found", "status": 404}), 404
-
-        # List of parameter objects
-        parameters = []
-        for row in rows:
-            parameters.append({
-                "id": row["id"],
-                "parameter_name": row["parameter_name"],
-                "sub_heading": row["sub_heading"],
-                "input_type": row["input_type"],
-                "unit": row["unit"],
-                "normalvalue": row["normalvalue"],
-                "default_value": row["default_value"]
-            })
-
-        return jsonify({
-            "data": parameters,
-            "total": len(parameters),
-            "status": 200
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
 # --------------------- Get parameter by ID --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
 def get_parameter(parameter_id):
@@ -128,13 +90,11 @@ def get_parameter(parameter_id):
 
 
 # --------------------- Create a new parameter --------------------- #
-
 @parameter_bp.route('/<int:test_profile_id>', methods=['POST'])
 def create_parameter(test_profile_id):
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
-
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         data = request.get_json()
 
         parameter_name = data.get("parameter_name")
@@ -143,34 +103,37 @@ def create_parameter(test_profile_id):
         unit = data.get("unit")
         normalvalue = data.get("normalvalue")
         default_value = data.get("default_value")
-    
-        #  Check if test_profile_id exists in test_profiles table
+        
+
+        # Check if test_profile_id exists
         cursor.execute("SELECT id FROM test_profiles WHERE id = %s", (test_profile_id,))
-        test_exists = cursor.fetchone()
-        if not test_exists:
+        if not cursor.fetchone():
             return jsonify({"error": "Invalid test_profile_id"}), 400
 
-        # 2️⃣ Check if any parameter already exists for this test_profile_id
-        cursor.execute("SELECT parameter_name FROM parameters WHERE parameter_name = %s", (parameter_name,))
-        existing_param = cursor.fetchone()
-        if existing_param:
+        #  Check for duplicate parameter name within same test
+        cursor.execute("""
+            SELECT parameter_name FROM parameters 
+            WHERE parameter_name = %s AND test_profile_id = %s
+        """, (parameter_name, test_profile_id))
+        if cursor.fetchone():
             return jsonify({
-                "error": f"Parameters for test_profile_id  already exist. Please edit instead of adding again."
+                "error": f"Parameter '{parameter_name}' already exists for this test. Please edit instead."
             }), 400
 
-        # Insert new parameter
+        #  Insert new parameter
         insert_query = """
             INSERT INTO parameters (
                 parameter_name, sub_heading, input_type, unit,
-                normalvalue, default_value, test_profile_id
+                normalvalue, default_value,  test_profile_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES ( %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             parameter_name, sub_heading, input_type, unit,
-            normalvalue, default_value, test_profile_id
+            normalvalue, default_value,  test_profile_id
         ))
         mysql.connection.commit()
+        cursor.close()
 
         return jsonify({"message": "Parameter added successfully"}), 201
 
@@ -283,4 +246,40 @@ def search_parameter(parameter_name):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    
+
+# --------------------------- GET  test  parameters by patient_test_id----------------------
+@parameter_bp.route('/by_test/<int:patient_test_id>', methods=['GET'])
+def get_parameters_by_test(patient_test_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        # patient_test_id se test_profile_id lo
+        cursor.execute("""
+            SELECT tp.id AS test_profile_id, tp.test_name
+            FROM patient_tests pt
+            JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE pt.id = %s
+        """, (patient_test_id,))
+        test_info = cursor.fetchone()
+
+        if not test_info:
+            return jsonify({"message": "Test not found"}), 404
+
+        # ab us test_profile_id ke parameters lao
+        cursor.execute("""
+            SELECT id AS parameter_id, parameter_name, unit, normalvalue, default_value
+            FROM parameters
+            WHERE test_profile_id = %s
+        """, (test_info['test_profile_id'],))
+        parameters = cursor.fetchall()
+
+        return jsonify({
+            "patient_test_id": patient_test_id,
+            "test_name": test_info['test_name'],
+            "parameters": parameters
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
