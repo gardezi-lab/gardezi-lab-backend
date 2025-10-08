@@ -282,4 +282,24 @@ def get_parameters_by_test(patient_test_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#------------------------- Get Parameters by Test ID ----------------
+@parameter_bp.route('/by_profile/<int:test_profile_id>', methods=['GET'])
+def get_parameters_by_profile(test_profile_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
+        cursor.execute("""
+            SELECT id AS parameter_id, parameter_name, unit, normalvalue, default_value
+            FROM parameters
+            WHERE test_profile_id = %s
+        """, (test_profile_id,))
+        parameters = cursor.fetchall()
+
+        return jsonify({
+            "test_profile_id": test_profile_id,
+            "parameters": parameters
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
