@@ -59,12 +59,12 @@ def create_patient_entry():
         test_json = json.dumps(test)
         insert_query = """
             INSERT INTO patient_entry 
-            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             cell, patient_name, father_hasband_MR, age, company, reffered_by,
-            gender, email, address, package, sample, priority, remarks, test_json
+            gender, email, address, package, sample, priority, remarks
         ))
         patient_id = cursor.lastrowid
 
