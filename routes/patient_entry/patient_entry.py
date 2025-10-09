@@ -84,7 +84,7 @@ def create_patient_entry():
 
             if test_id:
                 cursor.execute(
-                    "INSERT INTO patient_tests (patient_id, test_profile_id) VALUES (%s, %s)",
+                    "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
                     (patient_id, test_id)
                 )
                 patient_test_id = cursor.lastrowid
