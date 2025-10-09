@@ -471,6 +471,7 @@ def log_patient_activity():
     except Exception as e:
         print("Error in log_patient_activity:", str(e))
         return jsonify({"error": str(e)}), 500
+
 #---------------------- GET patient activiety ------------------
 @patient_entry_bp.route('/activity/<int:patient_id>', methods=['GET'])
 def get_patient_activity(patient_id):
