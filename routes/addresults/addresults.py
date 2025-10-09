@@ -444,13 +444,13 @@ def get_patient_tests_with_results(patient_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        #  Patient ke selected tests
+        # ✅ Patient ke selected tests
         cursor.execute("""
             SELECT pt.id AS patient_test_id,
-                   tp.id AS test_profile_id,
+                   tp.id AS test_id,
                    tp.test_name
             FROM patient_tests pt
-            JOIN test_profiles tp ON pt.test_profile_id = tp.id
+            JOIN test_profiles tp ON pt.test_id = tp.id
             WHERE pt.patient_id = %s
         """, (patient_id,))
         patient_tests = cursor.fetchall()
@@ -459,9 +459,9 @@ def get_patient_tests_with_results(patient_id):
 
         for test in patient_tests:
             patient_test_id = test['patient_test_id']
-            test_profile_id = test['test_profile_id']
+            test_id = test['test_id']
 
-            #  Parameters + unka result (LEFT JOIN)
+            # Parameters + unka result (LEFT JOIN)
             cursor.execute("""
                 SELECT p.id AS parameter_id,
                        p.parameter_name,
@@ -475,13 +475,13 @@ def get_patient_tests_with_results(patient_id):
                     AND pr.patient_test_id = %s
                     AND pr.test_profile_id = %s
                 WHERE p.test_profile_id = %s
-            """, (patient_test_id, test_profile_id, test_profile_id))
+            """, (patient_test_id, test_id, test_id))
 
             parameters = cursor.fetchall()
 
             response.append({
                 "patient_test_id": patient_test_id,
-                "test_profile_id": test_profile_id,
+                "test_id": test_id,
                 "test_name": test['test_name'],
                 "parameters": parameters
             })
