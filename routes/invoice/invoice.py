@@ -4,53 +4,89 @@ import qrcode
 import base64
 from io import BytesIO
 from datetime import datetime
+import MySQLdb.cursors
 
 invoice_bp = Blueprint('invoice', __name__, url_prefix='/api/invoice')
 mysql = MySQL()
 
 # ------------------ Invoice API -------------------
-@invoice_bp.route('/<int:id>', methods=['GET'])
-def generate_invoice(id):
+@invoice_bp.route('/<int:patient_id>', methods=['GET'])
+def generate_invoice(patient_id):
     try:
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        
-        get_query = """
-            SELECT patient_name, age, company, email, address, priority, remarks, test 
-            FROM patient_entry WHERE id = %s
-        """
-        cursor.execute(get_query, (id,))
-        result = cursor.fetchone()
+        #  Step 1: Get patient basic info
+        cursor.execute("""
+            SELECT id, patient_name, cell, gender, age, company, email, address, priority, remarks
+            FROM patient_entry
+            WHERE id = %s
+        """, (patient_id,))
+        patient = cursor.fetchone()
 
-        if not result:
+        if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
 
-        patient_data = {
-            "patient_name": result[0],
-            "age": result[1],
-            "company": result[2],
-            "email": result[3],
-            "address": result[4],
-            "priority": result[5],
-            "remark": result[6],
-            "test": result[7],
-            "invoice_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+        #  Step 2: Get all tests linked to this patient
+        cursor.execute("""
+            SELECT pt.id AS patient_test_id, tp.id AS test_id, tp.test_name
+            FROM patient_tests pt
+            JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE pt.patient_id = %s
+        """, (patient_id,))
+        tests = cursor.fetchall()
 
-        #  Generate QR code for invoice
-        qr_text = f"Invoice for {patient_data['patient_name']} - {patient_data['invoice_date']}"
+        test_list = []
+        for test in tests:
+            test_id = test['test_id']
+            patient_test_id = test['patient_test_id']
+
+            #  Step 3: For each test, get parameters and their results
+            cursor.execute("""
+                SELECT 
+                    p.parameter_name,
+                    p.unit,
+                    p.normalvalue,
+                    pr.result_value
+                FROM parameters p
+                LEFT JOIN patient_results pr
+                    ON pr.parameter_id = p.id
+                    AND pr.patient_test_id = %s
+                    AND pr.test_profile_id = %s
+                WHERE p.test_profile_id = %s
+            """, (patient_test_id, test_id, test_id))
+
+            parameters = cursor.fetchall()
+            test_list.append({
+                "test_name": test['test_name'],
+                "parameters": parameters
+            })
+
+        #  Step 4: Generate QR Code for invoice
+        qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         qr_img = qrcode.make(qr_text)
-
         buffer = BytesIO()
         qr_img.save(buffer, format="PNG")
         qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
         qr_data_url = f"data:image/png;base64,{qr_base64}"
 
-        #  Prepare response JSON
+        #  Step 5: Final JSON Response
         invoice_data = {
             "status": 200,
             "message": "Invoice generated successfully",
-            "patient": patient_data,
+            "patient": {
+                "patient_id": patient['id'],
+                "patient_name": patient['patient_name'],
+                "cell": patient['cell'],
+                "gender": patient['gender'],
+                "age": patient['age'],
+                "company": patient['company'],
+                "email": patient['email'],
+                "address": patient['address'],
+                "priority": patient['priority'],
+                "remarks": patient['remarks'],
+                "invoice_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            },
+            "tests": test_list,
             "qr_code": qr_data_url
         }
 

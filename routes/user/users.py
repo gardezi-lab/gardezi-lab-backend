@@ -197,7 +197,7 @@ def datalist_role(role_name):
         return jsonify(roles), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+#-------------------------- GET only doctor------------------------
 @users_bp.route('/doctors/', methods=['GET'])
 def get_doctors_only():
     try:
