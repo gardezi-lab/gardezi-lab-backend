@@ -349,3 +349,113 @@ def get_pending_results():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#----------------------- Add parameter rseult by test_profile_id - -----
+@results_bp.route('/add-parameters', methods=['POST'])
+def add_parameter_results():
+    try:
+        data = request.get_json()
+
+        patient_test_id = data.get("patient_test_id")
+        patient_id = data.get("patient_id")
+        test_profile_id = data.get("test_profile_id")
+        parameters = data.get("parameters", [])
+
+        if not patient_test_id:
+            return jsonify({"error": "Field 'patient_test_id' is required"}), 400
+        if not patient_id:
+            return jsonify({"error": "Field 'patient_id' is required"}), 400
+        if not test_profile_id:
+            return jsonify({"error": "Field 'test_profile_id' is required"}), 400
+        if not parameters or not isinstance(parameters, list):
+            return jsonify({"error": "Field 'parameters' must be a non-empty list"}), 400
+
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+
+        insert_query = """
+            INSERT INTO patient_results (patient_id, patient_test_id, test_profile_id, parameter_id, result_value, created_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+        """
+
+        for param in parameters:
+            parameter_id = param.get("parameter_id")
+            result_value = param.get("result_value")
+
+            if parameter_id is None or result_value is None:
+                continue
+
+            #  Correct order of values
+            cursor.execute(insert_query, (patient_id, patient_test_id, test_profile_id, parameter_id, result_value))
+
+        mysql.connection.commit()
+        cursor.close()
+
+        return jsonify({
+            "message": "Parameter results added successfully",
+            "patient_id": patient_id,
+            "patient_test_id": patient_test_id,
+            "test_profile_id": test_profile_id,
+            "total_parameters_added": len(parameters)
+        }), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+#-------------- GET patient all test their result add or not -----------
+@results_bp.route('/patient_results/<int:patient_id>', methods=['GET'])
+def get_patient_tests_with_results(patient_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        #  Patient ke selected tests
+        cursor.execute("""
+            SELECT pt.id AS patient_test_id,
+                   tp.id AS test_profile_id,
+                   tp.test_name
+            FROM patient_tests pt
+            JOIN test_profiles tp ON pt.test_profile_id = tp.id
+            WHERE pt.patient_id = %s
+        """, (patient_id,))
+        patient_tests = cursor.fetchall()
+
+        response = []
+
+        for test in patient_tests:
+            patient_test_id = test['patient_test_id']
+            test_profile_id = test['test_profile_id']
+
+            #  Parameters + unka result (LEFT JOIN)
+            cursor.execute("""
+                SELECT p.id AS parameter_id,
+                       p.parameter_name,
+                       p.unit,
+                       p.normalvalue,
+                       p.default_value,
+                       pr.result_value
+                FROM parameters p
+                LEFT JOIN patient_results pr
+                    ON pr.parameter_id = p.id
+                    AND pr.patient_test_id = %s
+                    AND pr.test_profile_id = %s
+                WHERE p.test_profile_id = %s
+            """, (patient_test_id, test_profile_id, test_profile_id))
+
+            parameters = cursor.fetchall()
+
+            response.append({
+                "patient_test_id": patient_test_id,
+                "test_profile_id": test_profile_id,
+                "test_name": test['test_name'],
+                "parameters": parameters
+            })
+
+        cursor.close()
+
+        return jsonify({
+            "patient_id": patient_id,
+            "tests": response
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

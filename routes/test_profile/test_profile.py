@@ -90,7 +90,7 @@ def create_test_profile():
         # --- Basic fields ---
         test_name = data.get("test_name")
         fee = data.get("fee")
-        department_name = data.get("department_name")  # Required field
+        department_id = data.get("department_id")  #  Now using department_id directly
 
         test_code = data.get("test_code")
         sample_required = data.get("sample_required")
@@ -102,7 +102,7 @@ def create_test_profile():
         required_fields = {
             "test_name": test_name,
             "fee": fee,
-            "department_name": department_name
+            "department_id": department_id
         }
 
         for field_name, value in required_fields.items():
@@ -130,17 +130,13 @@ def create_test_profile():
         unit_ref_range = to_bool(data.get("unit_ref_range"))
         test_formate = to_bool(data.get("test_formate"))
 
-        # --- Database operations ---
+        # --- Check if department_id is valid ---
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
-
-        # Get department_id from departments table
-        cursor.execute("SELECT id FROM departments WHERE department_name = %s LIMIT 1", (department_name,))
+        cursor.execute("SELECT id FROM departments WHERE id = %s LIMIT 1", (department_id,))
         dept_row = cursor.fetchone()
-        if dept_row:
-            department_id = dept_row['id']
-        else:
-            return jsonify({"error": f"Department '{department_name}' not found"}), 400
+        if not dept_row:
+            return jsonify({"error": f"Department with ID '{department_id}' not found"}), 400
 
         # --- Insert into test_profiles ---
         insert_query = """
