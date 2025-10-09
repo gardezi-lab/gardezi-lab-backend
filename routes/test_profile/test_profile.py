@@ -284,3 +284,33 @@ def get_departments():
        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#------------------- GET all tests of patient ------------------------
+import MySQLdb
+
+# --- GET API: Get patient test_profile by patient_id ---
+import MySQLdb
+from flask import jsonify
+
+# --- GET API: Get all test records by patient_id ---
+@test_profile_bp.route('/patient_tests/<int:patient_id>/', methods=['GET'])
+def get_patient_test_profile(patient_id):
+    try:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        # Check if patient exists
+        cursor.execute("SELECT * FROM patient_tests WHERE patient_id = %s", (patient_id,))
+        records = cursor.fetchall()
+
+        if not records:
+            return jsonify({"error": "Patient not found"}), 404
+
+        # Prepare response (since multiple tests can belong to one patient)
+        response = {
+            "patient_id": patient_id,
+            "tests": records  # return full list of test rows
+        }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

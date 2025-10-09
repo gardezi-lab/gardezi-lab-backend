@@ -32,7 +32,7 @@ def create_patient_entry():
         remarks = data.get('remarks')
         test = data.get('test', [])  # list of {"name": ..., "fee": ...}
 
-        # --- Validations for required fields ---
+        # --- Validations ---
         errors = []
         if not cell or not cell.isdigit() or len(cell) != 11:
             errors.append("Cell is required and must be 11 digits.")
@@ -46,25 +46,20 @@ def create_patient_entry():
             errors.append("Sample is required.")
         if not reffered_by or not str(reffered_by).strip():
             errors.append("Referred By is required.")
-        # if not tests or not isinstance(tests, list) or len(tests) == 0:
-        #     errors.append("At least one test is required.")
 
         if errors:
             return jsonify({"errors": errors}), 400
 
-        # Convert age to string
         age = str(age)
 
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        total_fee = 0
-        tests_list = []
+        # --- Insert patient_entry ---
         test_json = json.dumps(test)
-        # --- Insert patient entry ---
         insert_query = """
             INSERT INTO patient_entry 
-            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks,test)
+            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
@@ -72,13 +67,14 @@ def create_patient_entry():
             gender, email, address, package, sample, priority, remarks, test_json
         ))
         patient_id = cursor.lastrowid
-        print("patient_id",patient_id)
+
         # --- Insert patient_tests ---
+        total_fee = 0
+        tests_list = []
         for test_obj in test:
             test_name = test_obj.get("name")
             fee = int(test_obj.get("fee", 0))
 
-            # Get test_id from test_profiles
             cursor.execute(
                 "SELECT id FROM test_profiles WHERE test_name = %s LIMIT 1",
                 (test_name,)
@@ -88,7 +84,7 @@ def create_patient_entry():
 
             if test_id:
                 cursor.execute(
-                    "INSERT INTO patient_tests (patient_id, test_id) VALUES (%s, %s)",
+                    "INSERT INTO patient_tests (patient_id, test_profile_id) VALUES (%s, %s)",
                     (patient_id, test_id)
                 )
                 patient_test_id = cursor.lastrowid
@@ -105,23 +101,34 @@ def create_patient_entry():
                     "fee": "Not Found"
                 })
 
-        # --- Insert into results ---
+        # --- Insert into results table ---
+        from datetime import datetime
         current_date = datetime.now().strftime('%Y-%m-%d')
         cursor.execute(
             "INSERT INTO results (name, mr, date, add_results, sample) VALUES (%s, %s, %s, %s, %s)",
             (patient_name, father_hasband_MR, current_date, "", sample)
         )
 
+        # --- Log activity for Patient Entry ---
+        now_time = datetime.now()
+        cursor.execute("""
+            INSERT INTO patient_activity_log (patient_id, activity,  created_at)
+            VALUES (%s, %s, %s)
+        """, (patient_id, "Patient Entry Created", now_time))
+
         mysql.connection.commit()
         cursor.close()
 
         return jsonify({
             "message": "Patient entry created successfully",
-            
+            "patient_id": patient_id,
+            "tests": tests_list,
+            "total_fee": total_fee
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 #-------------------- GET selected test of patient by patient_id test-----------------------
 @patient_entry_bp.route('/tests/<int:patient_id>', methods=['GET'])
@@ -400,3 +407,96 @@ def get_unverified_tests():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ---------------------- Log Patient Activity ---------------------- #
+@patient_entry_bp.route('/activity', methods=['POST'])
+def log_patient_activity():
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)  # DictCursor for easy column access
+
+        data = request.get_json()
+        patient_id = data.get('patient_id')
+        activity = data.get('activity')
+
+        # --- Validation ---
+        if not patient_id or not activity:
+            return jsonify({"error": "patient_id and activity are required"}), 400
+
+        from datetime import datetime
+
+        now_time = datetime.now()
+
+        # --- Get last activity ---
+        cursor.execute("""
+            SELECT created_at 
+            FROM patient_activity_log 
+            WHERE patient_id = %s 
+            ORDER BY id DESC LIMIT 1
+        """, (patient_id,))
+        last_record = cursor.fetchone()
+
+        # --- Determine reference time for turnaround ---
+        if last_record and last_record['created_at']:
+            reference_time = last_record['created_at']
+        else:
+            # First activity → use patient_entry created_at
+            cursor.execute("""
+                SELECT created_at
+                FROM patient_entry
+                WHERE id = %s
+                LIMIT 1
+            """, (patient_id,))
+            entry_record = cursor.fetchone()
+            reference_time = entry_record['created_at'] if entry_record and entry_record['created_at'] else now_time
+
+        # --- Calculate turnaround time ---
+        turnaround_time = str(now_time - reference_time)
+
+        # --- Insert new activity ---
+        cursor.execute("""
+            INSERT INTO patient_activity_log (patient_id, activity, turnaround_time, created_at)
+            VALUES (%s, %s, %s, %s)
+        """, (patient_id, activity, turnaround_time, now_time))
+
+        mysql.connection.commit()
+        cursor.close()
+
+        return jsonify({
+            "message": "Activity logged successfully",
+            "patient_id": patient_id,
+            "activity": activity,
+            "turnaround_time": turnaround_time
+        }), 201
+
+    except Exception as e:
+        print("Error in log_patient_activity:", str(e))
+        return jsonify({"error": str(e)}), 500
+#---------------------- GET patient activiety ------------------
+@patient_entry_bp.route('/  api/patient_entry/activity/<int:patient_id>', methods=['GET'])
+def get_patient_activity(patient_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+        # --- Fetch all activities for this patient ---
+        cursor.execute("""
+            SELECT activity,  created_at
+            FROM patient_activity_log
+            WHERE patient_id = %s
+            ORDER BY created_at ASC
+        """, (patient_id,))
+        activities = cursor.fetchall()
+
+        cursor.close()
+
+        return jsonify({
+            "patient_id": patient_id,
+            "activities": activities,
+            "total_activities": len(activities)
+        }), 200
+
+    except Exception as e:
+        print("Error in get_patient_activity:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+    
