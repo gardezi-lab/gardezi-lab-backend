@@ -370,8 +370,9 @@ def add_parameter_results():
             return jsonify({"error": "Field 'parameters' must be a non-empty list"}), 400
 
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(DictCursor)
 
+        # --- Insert parameter results ---
         insert_query = """
             INSERT INTO patient_results (patient_id, patient_test_id, test_profile_id, parameter_id, result_value, created_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
@@ -384,8 +385,41 @@ def add_parameter_results():
             if parameter_id is None or result_value is None:
                 continue
 
-            #  Correct order of values
             cursor.execute(insert_query, (patient_id, patient_test_id, test_profile_id, parameter_id, result_value))
+
+        # --- Log activity for adding test results ---
+        from datetime import datetime
+        now_time = datetime.now()
+
+        # Get last activity for turnaround_time
+        cursor.execute("""
+            SELECT created_at 
+            FROM patient_activity_log
+            WHERE patient_id = %s
+            ORDER BY id DESC LIMIT 1
+        """, (patient_id,))
+        last_record = cursor.fetchone()
+
+        if last_record and last_record['created_at']:
+            reference_time = last_record['created_at']
+        else:
+            # First activity → use patient_entry created_at
+            cursor.execute("""
+                SELECT created_at
+                FROM patient_entry
+                WHERE id = %s
+                LIMIT 1
+            """, (patient_id,))
+            entry_record = cursor.fetchone()
+            reference_time = entry_record['created_at'] if entry_record and entry_record['created_at'] else now_time
+
+        turnaround_time = str(now_time - reference_time)
+
+        # Insert activity log
+        cursor.execute("""
+            INSERT INTO patient_activity_log (patient_id, activity,  created_at)
+            VALUES (%s, %s, %s)
+        """, (patient_id, "Test Results Added", now_time))
 
         mysql.connection.commit()
         cursor.close()
@@ -395,7 +429,9 @@ def add_parameter_results():
             "patient_id": patient_id,
             "patient_test_id": patient_test_id,
             "test_profile_id": test_profile_id,
-            "total_parameters_added": len(parameters)
+            "total_parameters_added": len(parameters),
+            "activity": "Test Results Added",
+            "turnaround_time": turnaround_time
         }), 201
 
     except Exception as e:
