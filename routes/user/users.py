@@ -136,7 +136,7 @@ def update_user(id):
         name = data.get("name")
         contact_no = data.get("contact_no")
         user_name = data.get("user_name")
-        plain_password = data.get("password")
+        # plain_password = data.get("password")
         role = data.get("role")
         age = data.get("age")
 
@@ -148,11 +148,11 @@ def update_user(id):
 
         update_query = """
             UPDATE users
-            SET name=%s, contact_no=%s, user_name=%s, password=%s, role=%s, age=%s
+            SET name=%s, contact_no=%s, user_name=%s,  role=%s, age=%s
             WHERE id=%s
         """
         cursor.execute(update_query, (
-            name, contact_no, user_name, plain_password, role, age, id
+            name, contact_no, user_name, role, age, id
         ))
         mysql.connection.commit()
 
