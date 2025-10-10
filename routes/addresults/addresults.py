@@ -89,71 +89,65 @@ def get_patient_results(patient_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
+        # ✅ Query: Sirf wo tests jinke result already add ho chuke hain
         query = """
         SELECT 
-            r.id AS result_id,
-            r.name,
-            r.mr,
-            r.date,
-            r.add_results,
-            r.sample,
             pt.id AS patient_test_id,
             tp.test_name,
-            pr.parameter_id,
+            tp.test_code,
+            tp.sample_required,
+            tp.select_header,
+            tp.fee,
+            tp.delivery_time,
+            tp.interpretation,
             p.parameter_name,
             p.unit,
             p.normalvalue,
-            pr.result_value
-        FROM results r
-        JOIN patient_entry pe ON r.patient_id = pe.id
-        JOIN patient_tests pt ON pt.patient_id = pe.id
+            pr.result_value,
+            pr.created_at
+        FROM patient_tests pt
         JOIN test_profiles tp ON tp.id = pt.test_id
-        LEFT JOIN patient_results pr ON pr.patient_test_id = pt.id
-        LEFT JOIN parameters p ON p.id = pr.parameter_id
-        WHERE r.patient_id = %s
-        ORDER BY r.date DESC, pt.id, p.id
+        JOIN patient_results pr ON pr.patient_test_id = pt.id
+        JOIN parameters p ON p.id = pr.parameter_id
+        WHERE pt.patient_id = %s
+        GROUP BY pr.id
+        ORDER BY pt.id DESC, p.id ASC
         """
+
         cursor.execute(query, (patient_id,))
         rows = cursor.fetchall()
         cursor.close()
 
-        # --- Transform rows to structured JSON ---
+        if not rows:
+            return jsonify({"message": "No test results found for this patient"}), 404
+
+        # ✅ Convert flat rows → structured format
         results_dict = {}
         for row in rows:
-            result_id = row['result_id']
-            if result_id not in results_dict:
-                results_dict[result_id] = {
-                    "result_id": result_id,
-                    "patient_id": patient_id,
-                    "name": row['name'],
-                    "mr": row['mr'],
-                    "date": str(row['date']),
-                    "add_results": row['add_results'],
-                    "sample": row['sample'],
-                    "tests": {}
-                }
-
             test_id = row['patient_test_id']
-            if test_id and test_id not in results_dict[result_id]['tests']:
-                results_dict[result_id]['tests'][test_id] = {
+            if test_id not in results_dict:
+                results_dict[test_id] = {
+                    "patient_test_id": test_id,
                     "test_name": row['test_name'],
+                    "test_code": row['test_code'],
+                    "sample_required": row['sample_required'],
+                    "select_header": row['select_header'],
+                    "fee": row['fee'],
+                    "delivery_time": row['delivery_time'],
+                    "interpretation": row['interpretation'],
+                    "created_at": str(row['created_at']),
                     "parameters": []
                 }
 
-            if row['parameter_id']:
-                results_dict[result_id]['tests'][test_id]['parameters'].append({
-                    "parameter_id": row['parameter_id'],
-                    "parameter_name": row['parameter_name'],
-                    "unit": row['unit'],
-                    "normalvalue": row['normalvalue'],
-                    "result_value": row['result_value']
-                })
+            results_dict[test_id]["parameters"].append({
+                "parameter_name": row['parameter_name'],
+                "unit": row['unit'],
+                "normalvalue": row['normalvalue'],
+                "result_value": row['result_value']
+            })
 
-        # Convert tests dict to list
-        final_results = []
-        for r in results_dict.values():
-            r['tests'] = list(r['tests'].values())
-            final_results.append(r)
+        # ✅ Final response list
+        final_results = list(results_dict.values())
 
         return jsonify(final_results), 200
 
@@ -349,93 +343,93 @@ def get_pending_results():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#----------------------- Add parameter rseult by test_profile_id - -----
-@results_bp.route('/add-parameters', methods=['POST'])
-def add_parameter_results():
-    try:
-        data = request.get_json()
+# #----------------------- Add parameter rseult by test_profile_id - -----
+# @results_bp.route('/add-parameters', methods=['POST'])
+# def add_parameter_results():
+#     try:
+#         data = request.get_json()
 
-        patient_test_id = data.get("patient_test_id")
-        patient_id = data.get("patient_id")
-        test_profile_id = data.get("test_profile_id")
-        parameters = data.get("parameters", [])
+#         patient_test_id = data.get("patient_test_id")
+#         patient_id = data.get("patient_id")
+#         test_profile_id = data.get("test_profile_id")
+#         parameters = data.get("parameters", [])
 
-        if not patient_test_id:
-            return jsonify({"error": "Field 'patient_test_id' is required"}), 400
-        if not patient_id:
-            return jsonify({"error": "Field 'patient_id' is required"}), 400
-        if not test_profile_id:
-            return jsonify({"error": "Field 'test_profile_id' is required"}), 400
-        if not parameters or not isinstance(parameters, list):
-            return jsonify({"error": "Field 'parameters' must be a non-empty list"}), 400
+#         if not patient_test_id:
+#             return jsonify({"error": "Field 'patient_test_id' is required"}), 400
+#         if not patient_id:
+#             return jsonify({"error": "Field 'patient_id' is required"}), 400
+#         if not test_profile_id:
+#             return jsonify({"error": "Field 'test_profile_id' is required"}), 400
+#         if not parameters or not isinstance(parameters, list):
+#             return jsonify({"error": "Field 'parameters' must be a non-empty list"}), 400
 
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
+#         mysql = current_app.mysql
+#         cursor = mysql.connection.cursor(DictCursor)
 
-        # --- Insert parameter results ---
-        insert_query = """
-            INSERT INTO patient_results (patient_id, patient_test_id, test_profile_id, parameter_id, result_value, created_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-        """
+#         # --- Insert parameter results ---
+#         insert_query = """
+#             INSERT INTO patient_results (patient_id, patient_test_id, test_profile_id, parameter_id, result_value, created_at)
+#             VALUES (%s, %s, %s, %s, %s, NOW())
+#         """
 
-        for param in parameters:
-            parameter_id = param.get("parameter_id")
-            result_value = param.get("result_value")
+#         for param in parameters:
+#             parameter_id = param.get("parameter_id")
+#             result_value = param.get("result_value")
 
-            if parameter_id is None or result_value is None:
-                continue
+#             if parameter_id is None or result_value is None:
+#                 continue
 
-            cursor.execute(insert_query, (patient_id, patient_test_id, test_profile_id, parameter_id, result_value))
+#             cursor.execute(insert_query, (patient_id, patient_test_id, test_profile_id, parameter_id, result_value))
 
-        # --- Log activity for adding test results ---
-        from datetime import datetime
-        now_time = datetime.now()
+#         # --- Log activity for adding test results ---
+#         from datetime import datetime
+#         now_time = datetime.now()
 
-        # Get last activity for turnaround_time
-        cursor.execute("""
-            SELECT created_at 
-            FROM patient_activity_log
-            WHERE patient_id = %s
-            ORDER BY id DESC LIMIT 1
-        """, (patient_id,))
-        last_record = cursor.fetchone()
+#         # Get last activity for turnaround_time
+#         cursor.execute("""
+#             SELECT created_at 
+#             FROM patient_activity_log
+#             WHERE patient_id = %s
+#             ORDER BY id DESC LIMIT 1
+#         """, (patient_id,))
+#         last_record = cursor.fetchone()
 
-        if last_record and last_record['created_at']:
-            reference_time = last_record['created_at']
-        else:
-            # First activity → use patient_entry created_at
-            cursor.execute("""
-                SELECT created_at
-                FROM patient_entry
-                WHERE id = %s
-                LIMIT 1
-            """, (patient_id,))
-            entry_record = cursor.fetchone()
-            reference_time = entry_record['created_at'] if entry_record and entry_record['created_at'] else now_time
+#         if last_record and last_record['created_at']:
+#             reference_time = last_record['created_at']
+#         else:
+#             # First activity → use patient_entry created_at
+#             cursor.execute("""
+#                 SELECT created_at
+#                 FROM patient_entry
+#                 WHERE id = %s
+#                 LIMIT 1
+#             """, (patient_id,))
+#             entry_record = cursor.fetchone()
+#             reference_time = entry_record['created_at'] if entry_record and entry_record['created_at'] else now_time
 
-        turnaround_time = str(now_time - reference_time)
+#         turnaround_time = str(now_time - reference_time)
 
-        # Insert activity log
-        cursor.execute("""
-            INSERT INTO patient_activity_log (patient_id, activity,  created_at)
-            VALUES (%s, %s, %s)
-        """, (patient_id, "Test Results Added", now_time))
+#         # Insert activity log
+#         cursor.execute("""
+#             INSERT INTO patient_activity_log (patient_id, activity,  created_at)
+#             VALUES (%s, %s, %s)
+#         """, (patient_id, "Test Results Added", now_time))
 
-        mysql.connection.commit()
-        cursor.close()
+#         mysql.connection.commit()
+#         cursor.close()
 
-        return jsonify({
-            "message": "Parameter results added successfully",
-            "patient_id": patient_id,
-            "patient_test_id": patient_test_id,
-            "test_profile_id": test_profile_id,
-            "total_parameters_added": len(parameters),
-            "activity": "Test Results Added",
-            "turnaround_time": turnaround_time
-        }), 201
+#         return jsonify({
+#             "message": "Parameter results added successfully",
+#             "patient_id": patient_id,
+#             "patient_test_id": patient_test_id,
+#             "test_profile_id": test_profile_id,
+#             "total_parameters_added": len(parameters),
+#             "activity": "Test Results Added",
+#             "turnaround_time": turnaround_time
+#         }), 201
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 #-------------- GET patient all test their result add or not -----------
 @results_bp.route('/patient_results/<int:patient_id>', methods=['GET'])
@@ -444,7 +438,7 @@ def get_patient_tests_with_results(patient_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # ✅ Patient ke selected tests
+        #  Patient ke selected tests
         cursor.execute("""
             SELECT pt.id AS patient_test_id,
                    tp.id AS test_id,

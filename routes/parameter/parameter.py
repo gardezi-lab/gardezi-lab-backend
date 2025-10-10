@@ -80,8 +80,6 @@ def get_parameter(parameter_id):
                 "normal_value": parameter[5],
                 "default_value": parameter[6],
                 "status" : 200
-                
-                
             }), 200
         else:
             return jsonify({"error": "Parameter not found"}), 404
@@ -247,59 +245,3 @@ def search_parameter(parameter_name):
         return jsonify({"error": str(e)}), 500
 
 
-# --------------------------- GET  Selected test  parameters by patient_test_id----------------------
-@parameter_bp.route('/by_test/<int:patient_test_id>', methods=['GET'])
-def get_parameters_by_test(patient_test_id):
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        # patient_test_id se test_profile_id lo
-        cursor.execute("""
-            SELECT tp.id AS test_profile_id, tp.test_name
-            FROM patient_tests pt
-            JOIN test_profiles tp ON pt.test_id = tp.id
-            WHERE pt.id = %s
-        """, (patient_test_id,))
-        test_info = cursor.fetchone()
-
-        if not test_info:
-            return jsonify({"message": "Test not found"}), 404
-
-        # ab us test_profile_id ke parameters lao
-        cursor.execute("""
-            SELECT id AS parameter_id, parameter_name, unit, normalvalue, default_value
-            FROM parameters
-            WHERE test_profile_id = %s
-        """, (test_info['test_profile_id'],))
-        parameters = cursor.fetchall()
-
-        return jsonify({
-            "patient_test_id": patient_test_id,
-            "test_name": test_info['test_name'],
-            "parameters": parameters
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-#------------------------- Get Selected Test  Parameters by test_profile_id  ----------------
-@parameter_bp.route('/by_profile/<int:test_profile_id>', methods=['GET'])
-def get_parameters_by_profile(test_profile_id):
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        cursor.execute("""
-            SELECT id AS parameter_id, parameter_name, unit, normalvalue, default_value
-            FROM parameters
-            WHERE test_profile_id = %s
-        """, (test_profile_id,))
-        parameters = cursor.fetchall()
-
-        return jsonify({
-            "test_profile_id": test_profile_id,
-            "parameters": parameters
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
