@@ -20,7 +20,7 @@ def generate_invoice(patient_id):
             SELECT 
                 id, patient_name, cell, gender, age,  remarks
                 ,reffered_by,MR_number,sample,
-                discount, paid, unpaid
+                discount, paid, total_fee
             FROM patient_entry
             WHERE id = %s
         """, (patient_id,))
