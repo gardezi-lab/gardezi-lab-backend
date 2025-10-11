@@ -56,7 +56,7 @@ def create_patient_entry():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # --- Step 1: Insert Patient without MR_number & total_fee first ---
+        # --- Step 1: Insert Patient without MR_number & total_fee ---
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender,
@@ -70,26 +70,26 @@ def create_patient_entry():
             discount, paid
         ))
 
-        # ---  Get the new patient_id ---
+        # --- Step 2: Get the new patient_id ---
         patient_id = cursor.lastrowid
 
-        # ---  Generate MR_number based on patient_id ---
+        # --- Step 3: Generate MR_number ---
         prefix = "2025-GL-"
         MR_number = f"{prefix}{patient_id}"
 
-        # ---  Update MR_number in patient_entry ---
+        # --- Step 4: Update MR_number ---
         cursor.execute(
             "UPDATE patient_entry SET MR_number = %s WHERE id = %s",
             (MR_number, patient_id)
         )
 
-        # --- Step 5: Insert Patient Tests & Calculate Total Fee ---
+        # --- Step 5: Insert Tests & Calculate Total Fee ---
         total_fee = 0
         tests_list = []
         for test_obj in test:
             test_name = test_obj.get("name")
 
-            #  Check if test exists in DB and get its fee
+            # Fetch test info
             cursor.execute("SELECT id, fee FROM test_profiles WHERE test_name = %s LIMIT 1", (test_name,))
             row = cursor.fetchone()
 
@@ -120,7 +120,16 @@ def create_patient_entry():
             (total_fee, patient_id)
         )
 
-        # --- Step 7: Log Activity ---
+        # --- Step 7: Insert into cash table ---
+        cursor.execute(
+            """
+            INSERT INTO cash (description, dr)
+            VALUES (%s, %s)
+            """,
+            (f"{MR_number}", total_fee)
+        )
+
+        # --- Step 8: Log Activity ---
         now_time = datetime.now()
         cursor.execute(
             "INSERT INTO patient_activity_log (patient_id, activity, created_at) VALUES (%s, %s, %s)",
