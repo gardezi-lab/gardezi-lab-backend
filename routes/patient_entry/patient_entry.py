@@ -231,56 +231,93 @@ def get_test_parameters(patient_test_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-#-------------- Add result of patient selected test parameters by patient_test_id---------
+#---------------------Add result of patient selected test parameters by patient_test_id----
 @patient_entry_bp.route('/test_results/<int:patient_test_id>/', methods=['POST'])
-def or_update_result(patient_test_id):
+def add_or_update_result(patient_test_id):
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         data = request.get_json()
+        print("Request Data:", data)  # Debug print to show received data
+
+        patient_id = data.get("patient_id")
         results = data.get("results", [])
+        parameters = data.get("parameters", [])
+        test_profile_id = data.get("test_profile_id")
+        
+        # If results list is empty, extract from parameters
+        if not results and parameters:
+            results = [
+                {"parameter_id": p.get("parameter_id"), "result_value": p.get("result_value")}
+                for p in parameters if p.get("parameter_id") and p.get("result_value")
+            ]
+
+        print("Extracted Results:", results)  # Debug print
+
+        # --- Validation ---
+        if not patient_id:
+            return jsonify({"error": "patient_id is required"}), 400
 
         if not results or not isinstance(results, list):
-            return jsonify({"error": "Invalid or empty results list"}), 400
+            return jsonify({"error": "results list is invalid or empty"}), 400
 
-        for item in results:
-            parameter_id = item.get("parameter_id")
-            result_value = item.get("result_value")
+        # --- Step 1: Get test_profile_id from patient_tests table ---
+        # cursor.execute("SELECT test_profile_id FROM patient_tests WHERE id = %s", (patient_test_id,))
+        # test_ref = cursor.fetchone()
+        # if not test_ref:
+        #     return jsonify({"error": "Invalid patient_test_id"}), 400
 
-            # ✅ skip if parameter_id or result_value missing
-            if not parameter_id or result_value is None:
-                continue  
+        # test_profile_id = test_ref['test_profile_id']
 
-            # 🔍 check if result already exists
+        # --- Step 2: Verify that test_profile_id exists in test_profiles ---
+        cursor.execute("SELECT id, test_name FROM test_profiles WHERE id = %s", (test_profile_id,))
+        test_profile = cursor.fetchone()
+        if not test_profile:
+            return jsonify({"error": "Test profile not found"}), 404
+
+        # --- Step 3: Insert/Update results ---
+        for result in results:
+            parameter_id = result.get("parameter_id")
+            result_value = result.get("result_value")
+
+            if not parameter_id or result_value in [None, "", "NULL"]:
+                continue  # skip invalid data
+
+            # Check if record already exists
             cursor.execute("""
                 SELECT id FROM patient_results
                 WHERE patient_test_id = %s AND parameter_id = %s
             """, (patient_test_id, parameter_id))
             existing = cursor.fetchone()
-
+            print(existing)
             if existing:
-                # 🔄 update existing result
                 cursor.execute("""
                     UPDATE patient_results
-                    SET result_value = %s
+                    SET result_value = %s, patient_id = %s, test_profile_id = %s
                     WHERE id = %s
-                """, (result_value, existing['id']))
+                """, (result_value, patient_id, test_profile_id, existing['id']))
             else:
-                # ➕ insert new result
                 cursor.execute("""
-                    INSERT INTO patient_results (patient_test_id, parameter_id, result_value, created_at)
-                    VALUES (%s, %s, %s, NOW())
-                """, (patient_test_id, parameter_id, result_value))
+                    INSERT INTO patient_results
+                    (patient_id, patient_test_id, parameter_id, result_value, created_at, test_profile_id, is_completed)
+                    VALUES (%s, %s, %s, %s, NOW(), %s, 0)
+                """, (patient_id, patient_test_id, parameter_id, result_value, test_profile_id))
 
         mysql.connection.commit()
         cursor.close()
 
-        return jsonify({"message": "Results saved successfully"}), 200
+        return jsonify({
+            "message": "Results saved successfully",
+            "test_profile_id": test_profile_id,
+            "test_name": test_profile["test_name"],
+            "results": results  #  Return the extracted results for confirmation
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
