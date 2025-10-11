@@ -13,7 +13,6 @@ mysql = MySQL()
 # ================== Patient Entry CRUD Operations ================== #
 
 # ------------------- Create Patient Entry ------------------ #
-
 @patient_entry_bp.route('/', methods=['POST'])
 def create_patient_entry():
     try:
@@ -35,13 +34,10 @@ def create_patient_entry():
         remarks = data.get('remarks')
         discount = int(data.get('discount', 0))
         paid = int(data.get('paid', 0))
-        unpaid = int(data.get('unpaid', 0))
         test = data.get('test', [])
 
         # --- Validations ---
         errors = []
-        if not cell or not cell.isdigit() or len(cell) != 11:
-            errors.append("Cell must be 11 digits.")
         if not patient_name or not str(patient_name).strip():
             errors.append("Patient name is required.")
         if age is None:
@@ -57,47 +53,49 @@ def create_patient_entry():
             return jsonify({"errors": errors}), 400
 
         age = str(age)
-
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # --- Generate Unique MR Number ---
-        prefix = "2025-GL-"
-        while True:
-            random_number = random.randint(1000, 9999)
-            MR_number = f"{prefix}{random_number}".strip()
-            cursor.execute("SELECT COUNT(*) AS count FROM patient_entry WHERE MR_number = %s", (MR_number,))
-            result = cursor.fetchone()
-            if result and result['count'] == 0:
-                break
-
-        # --- Insert patient entry ---
+        # --- Step 1: Insert Patient without MR_number & total_fee first ---
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender,
-             email, address, package, sample, priority, remarks, MR_number,
-             discount, paid, unpaid)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             email, address, package, sample, priority, remarks,
+             discount, paid, total_fee)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)
         """
         cursor.execute(insert_query, (
             cell, patient_name, father_hasband_MR, age, company, reffered_by,
             gender, email, address, package, sample, priority, remarks,
-            MR_number, discount, paid, unpaid
+            discount, paid
         ))
+
+        # ---  Get the new patient_id ---
         patient_id = cursor.lastrowid
 
-        # --- Insert Patient Tests ---
+        # ---  Generate MR_number based on patient_id ---
+        prefix = "2025-GL-"
+        MR_number = f"{prefix}{patient_id}"
+
+        # ---  Update MR_number in patient_entry ---
+        cursor.execute(
+            "UPDATE patient_entry SET MR_number = %s WHERE id = %s",
+            (MR_number, patient_id)
+        )
+
+        # --- Step 5: Insert Patient Tests & Calculate Total Fee ---
         total_fee = 0
         tests_list = []
         for test_obj in test:
             test_name = test_obj.get("name")
-            fee = int(test_obj.get("fee", 0))
 
-            cursor.execute("SELECT id FROM test_profiles WHERE test_name = %s LIMIT 1", (test_name,))
+            #  Check if test exists in DB and get its fee
+            cursor.execute("SELECT id, fee FROM test_profiles WHERE test_name = %s LIMIT 1", (test_name,))
             row = cursor.fetchone()
-            test_id = row['id'] if row else None
 
-            if test_id:
+            if row:
+                test_id = row['id']
+                fee = int(row['fee'])
                 cursor.execute(
                     "INSERT INTO patient_tests (patient_id, test_id, verified) VALUES (%s, %s, %s)",
                     (patient_id, test_id, "Unverified")
@@ -116,7 +114,13 @@ def create_patient_entry():
                     "fee": "Not Found"
                 })
 
-        # --- Log Activity ---
+        # --- Step 6: Update total_fee in patient_entry ---
+        cursor.execute(
+            "UPDATE patient_entry SET total_fee = %s WHERE id = %s",
+            (total_fee, patient_id)
+        )
+
+        # --- Step 7: Log Activity ---
         now_time = datetime.now()
         cursor.execute(
             "INSERT INTO patient_activity_log (patient_id, activity, created_at) VALUES (%s, %s, %s)",
@@ -133,8 +137,7 @@ def create_patient_entry():
             "tests": tests_list,
             "total_fee": total_fee,
             "discount": discount,
-            "paid": paid,
-            "unpaid": unpaid
+            "paid": paid
         }), 201
 
     except Exception as e:
@@ -151,23 +154,21 @@ def create_patient_entry():
 
 
 
-
 #-------------------- GET selected test of patient by patient_id -----------------------
 @patient_entry_bp.route('/tests/<int:patient_id>/', methods=['GET'])
 def get_patient_tests(patient_id):
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Sirf un tests ko lao jin ka result patient_results me abhi tak add nahi hua
+        # ✅ Sirf un tests ko lao jin ka result patient_results me abhi tak add nahi hua
         query = """
-        SELECT pt.id AS patient_test_id, tp.test_name
+        SELECT 
+            pt.id AS patient_test_id, 
+            tp.test_name
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
         WHERE pt.patient_id = %s
-        AND pt.id NOT IN (
-            SELECT DISTINCT patient_test_id FROM patient_results
-        )
         """
         cursor.execute(query, (patient_id,))
         tests = cursor.fetchall()
@@ -178,82 +179,55 @@ def get_patient_tests(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#-------------------GET patient selected test parameters by patient_test_id----------
-@patient_entry_bp.route('/test_parameters/<int:patient_test_id>/', methods=['GET'])
-def get_test_parameters(patient_test_id):
+#-------------- Add result of patient selected test parameters by patient_test_id---------
+@patient_entry_bp.route('/test_results/<int:patient_test_id>/', methods=['POST'])
+def or_update_result(patient_test_id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        query = """
-        SELECT tp.parameter_name, tp.unit, tp.normalvalue, tp.default_value, tp.id AS parameter_id
-        FROM parameters tp
-        JOIN patient_tests pt ON tp.test_profile_id = pt.test_id
-        WHERE pt.id = %s
-        """
-        cursor.execute(query, (patient_test_id,))
-        parameters = cursor.fetchall()
-        cursor.close()
-        return jsonify(parameters), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-#----------------- Add result of patient selected test  by patient_test_id -------------
-@patient_entry_bp.route('/test_results/<int:patient_test_id>/', methods=['POST'])
-def save_test_results(patient_test_id):
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
-
         data = request.get_json()
-        patient_id = data.get('patient_id')
-        parameters = data.get('parameters', [])
+        results = data.get("results", [])
 
-        if not patient_id:
-            return jsonify({"error": "patient_id is required"}), 400
+        if not results or not isinstance(results, list):
+            return jsonify({"error": "Invalid or empty results list"}), 400
 
-        # ✅ Step 1: Check if results already exist for this patient_test_id
-        cursor.execute("""
-            SELECT COUNT(*) AS result_count
-            FROM patient_results
-            WHERE patient_test_id = %s
-        """, (patient_test_id,))
-        result_check = cursor.fetchone()
+        for item in results:
+            parameter_id = item.get("parameter_id")
+            result_value = item.get("result_value")
 
-        if result_check and result_check[0] > 0:
-            cursor.close()
-            return jsonify({
-                "error": "Results for this test have already been added. You cannot add them again.",
-                "status": "duplicate"
-            }), 409  # 409 Conflict
+            # ✅ skip if parameter_id or result_value missing
+            if not parameter_id or result_value is None:
+                continue  
 
-        #  Step 2: Insert new results
-        for item in parameters:
+            # 🔍 check if result already exists
             cursor.execute("""
-                INSERT INTO patient_results (patient_test_id, patient_id, parameter_id, result_value, created_at)
-                VALUES (%s, %s, %s, %s, NOW())
-            """, (patient_test_id, patient_id, item['parameter_id'], item['result_value']))
+                SELECT id FROM patient_results
+                WHERE patient_test_id = %s AND parameter_id = %s
+            """, (patient_test_id, parameter_id))
+            existing = cursor.fetchone()
 
-        #  Step 3: Mark this test as verified after results are added
-        cursor.execute("""
-            UPDATE patient_tests
-            SET status = 'Verified', verified_at = NOW()
-            WHERE id = %s AND patient_id = %s
-        """, (patient_test_id, patient_id))
+            if existing:
+                # 🔄 update existing result
+                cursor.execute("""
+                    UPDATE patient_results
+                    SET result_value = %s
+                    WHERE id = %s
+                """, (result_value, existing['id']))
+            else:
+                # ➕ insert new result
+                cursor.execute("""
+                    INSERT INTO patient_results (patient_test_id, parameter_id, result_value, created_at)
+                    VALUES (%s, %s, %s, NOW())
+                """, (patient_test_id, parameter_id, result_value))
 
         mysql.connection.commit()
         cursor.close()
 
-        return jsonify({
-            "message": "Results added successfully and test verified.",
-            "patient_id": patient_id,
-            "patient_test_id": patient_test_id
-        }), 201
+        return jsonify({"message": "Results saved successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
