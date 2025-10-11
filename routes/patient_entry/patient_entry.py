@@ -33,7 +33,10 @@ def create_patient_entry():
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
-        test = data.get('test', [])  # list of {"name": ..., "fee": ...}
+        discount = int(data.get('discount', 0))
+        paid = int(data.get('paid', 0))
+        unpaid = int(data.get('unpaid', 0))
+        test = data.get('test', [])
 
         # --- Validations ---
         errors = []
@@ -58,7 +61,7 @@ def create_patient_entry():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # ---  Generate Unique MR Number ---
+        # --- Generate Unique MR Number ---
         prefix = "2025-GL-"
         while True:
             random_number = random.randint(1000, 9999)
@@ -66,33 +69,31 @@ def create_patient_entry():
             cursor.execute("SELECT COUNT(*) AS count FROM patient_entry WHERE MR_number = %s", (MR_number,))
             result = cursor.fetchone()
             if result and result['count'] == 0:
-                break  # Unique MR number found
+                break
 
-        # ---  Insert into patient_entry (without entry_date) ---
+        # --- Insert patient entry ---
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender,
-             email, address, package, sample, priority, remarks, MR_number)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             email, address, package, sample, priority, remarks, MR_number,
+             discount, paid, unpaid)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             cell, patient_name, father_hasband_MR, age, company, reffered_by,
             gender, email, address, package, sample, priority, remarks,
-            MR_number
+            MR_number, discount, paid, unpaid
         ))
         patient_id = cursor.lastrowid
 
-        # ---  Insert Patient Tests ---
+        # --- Insert Patient Tests ---
         total_fee = 0
         tests_list = []
         for test_obj in test:
             test_name = test_obj.get("name")
             fee = int(test_obj.get("fee", 0))
 
-            cursor.execute(
-                "SELECT id FROM test_profiles WHERE test_name = %s LIMIT 1",
-                (test_name,)
-            )
+            cursor.execute("SELECT id FROM test_profiles WHERE test_name = %s LIMIT 1", (test_name,))
             row = cursor.fetchone()
             test_id = row['id'] if row else None
 
@@ -115,7 +116,7 @@ def create_patient_entry():
                     "fee": "Not Found"
                 })
 
-        # ---  Log Activity ---
+        # --- Log Activity ---
         now_time = datetime.now()
         cursor.execute(
             "INSERT INTO patient_activity_log (patient_id, activity, created_at) VALUES (%s, %s, %s)",
@@ -130,7 +131,10 @@ def create_patient_entry():
             "patient_id": patient_id,
             "MR_number": MR_number,
             "tests": tests_list,
-            "total_fee": total_fee
+            "total_fee": total_fee,
+            "discount": discount,
+            "paid": paid,
+            "unpaid": unpaid
         }), 201
 
     except Exception as e:
@@ -144,6 +148,7 @@ def create_patient_entry():
             except Exception:
                 pass
         return jsonify({"error": str(e)}), 500
+
 
 
 
