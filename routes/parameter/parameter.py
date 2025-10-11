@@ -138,6 +138,65 @@ def create_parameter(test_profile_id):
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
+#---------------------- GET parameter by test_profile_id --------
+@parameter_bp.route('/test_parameters/<int:test_profile_id>', methods=['GET'])
+def get_parameters(test_profile_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        #  Check if test_profile_id exists
+        cursor.execute("""
+            SELECT id, test_name 
+            FROM test_profiles 
+            WHERE id = %s
+        """, (test_profile_id,))
+        test_profile = cursor.fetchone()
+
+        if not test_profile:
+            cursor.close()
+            return jsonify({"error": "Invalid test_profile_id"}), 404
+
+        #  Fetch ALL parameters for this test_profile_id
+        query = """
+            SELECT 
+                id AS parameter_id,
+                parameter_name,
+                IFNULL(sub_heading, '') AS sub_heading,
+                IFNULL(input_type, '') AS input_type,
+                IFNULL(unit, '') AS unit,
+                IFNULL(normalvalue, '') AS normalvalue,
+                IFNULL(default_value, '') AS default_value,
+                test_profile_id
+            FROM parameters
+            WHERE test_profile_id = %s
+            ORDER BY id ASC
+        """
+        cursor.execute(query, (test_profile_id,))
+        parameters = cursor.fetchall()
+        cursor.close()
+
+        #  If no data found
+        if not parameters:
+            return jsonify({
+                "message": "No parameters found for this test profile",
+                "test_profile": test_profile,
+                "parameters": []
+            }), 200
+
+        #  Return list of parameters (not single object)
+        return jsonify({
+            "status": 200,
+            "message": "Parameters fetched successfully",
+            "test_profile": test_profile,
+            "total_parameters": len(parameters),
+            "parameters": parameters
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 
 # --------------------- Update an existing parameter --------------------- #
