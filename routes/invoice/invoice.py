@@ -18,7 +18,8 @@ def generate_invoice(patient_id):
         # Step 1: Get patient info (including discount, paid, unpaid)
         cursor.execute("""
             SELECT 
-                id, patient_name, cell, gender, age, company, email, address, priority, remarks,
+                id, patient_name, cell, gender, age,  remarks
+                ,reffered_by,MR_number,sample,
                 discount, paid, unpaid
             FROM patient_entry
             WHERE id = %s
@@ -95,12 +96,11 @@ def generate_invoice(patient_id):
                 "patient_id": patient['id'],
                 "patient_name": patient['patient_name'],
                 "cell": patient['cell'],
+                "refferd_by" :patient['reffered_by'],
                 "gender": patient['gender'],
                 "age": patient['age'],
-                "company": patient['company'],
-                "email": patient['email'],
-                "address": patient['address'],
-                "priority": patient['priority'],
+                "MR_number": patient['MR_number'],
+                "sample": patient["sample"],
                 "remarks": patient['remarks'],
                 "invoice_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             },
