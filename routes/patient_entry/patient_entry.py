@@ -188,6 +188,50 @@ def get_patient_tests(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+#------------------ GET patient selected tests parameter by patient_test_id ---
+@patient_entry_bp.route('/test_parameters/<int:patient_test_id>/', methods=['GET'])
+def get_test_parameters(patient_test_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        #  Step 1: test_id nikal lo patient_tests se
+        cursor.execute("""
+            SELECT test_id 
+            FROM patient_tests 
+            WHERE id = %s
+        """, (patient_test_id,))
+        test_row = cursor.fetchone()
+
+        if not test_row:
+            return jsonify({"error": "Invalid patient_test_id"}), 404
+
+        test_id = test_row['test_id']
+
+        #  Step 2: ab os test ke parameters lao
+        cursor.execute("""
+            SELECT 
+                tp.id AS parameter_id,
+                tp.parameter_name,
+                tp.unit,
+                tp.normalvalue,
+                tp.default_value
+            FROM parameters tp
+            WHERE tp.test_profile_id = %s
+        """, (test_id,))
+
+        parameters = cursor.fetchall()
+        cursor.close()
+
+        return jsonify({
+            "patient_test_id": patient_test_id,
+            "test_id": test_id,
+            "parameters": parameters
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 #-------------- Add result of patient selected test parameters by patient_test_id---------
 @patient_entry_bp.route('/test_results/<int:patient_test_id>/', methods=['POST'])
 def or_update_result(patient_test_id):
