@@ -15,7 +15,7 @@ def generate_invoice(patient_id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        #  Step 1: Get patient basic info
+        # Step 1: Get patient basic info
         cursor.execute("""
             SELECT id, patient_name, cell, gender, age, company, email, address, priority, remarks
             FROM patient_entry
@@ -26,21 +26,31 @@ def generate_invoice(patient_id):
         if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
 
-        #  Step 2: Get all tests linked to this patient
+        # Step 2: Get all tests linked to this patient (including fee)
         cursor.execute("""
-            SELECT pt.id AS patient_test_id, tp.id AS test_id, tp.test_name
+            SELECT 
+                pt.id AS patient_test_id, 
+                tp.id AS test_id, 
+                tp.test_name,
+                tp.fee
             FROM patient_tests pt
             JOIN test_profiles tp ON pt.test_id = tp.id
             WHERE pt.patient_id = %s
         """, (patient_id,))
         tests = cursor.fetchall()
 
+        total_fee = 0
         test_list = []
+
         for test in tests:
             test_id = test['test_id']
             patient_test_id = test['patient_test_id']
+            
+            # ✅ Convert fee safely to int (default = 0)
+            fee = int(test.get('fee') or 0)
+            total_fee += fee
 
-            #  Step 3: For each test, get parameters and their results
+            # Step 3: Get parameters and their results
             cursor.execute("""
                 SELECT 
                     p.parameter_name,
@@ -58,10 +68,11 @@ def generate_invoice(patient_id):
             parameters = cursor.fetchall()
             test_list.append({
                 "test_name": test['test_name'],
+                "fee": fee,
                 "parameters": parameters
             })
 
-        #  Step 4: Generate QR Code for invoice
+        # Step 4: Generate QR Code
         qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         qr_img = qrcode.make(qr_text)
         buffer = BytesIO()
@@ -69,7 +80,7 @@ def generate_invoice(patient_id):
         qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
         qr_data_url = f"data:image/png;base64,{qr_base64}"
 
-        #  Step 5: Final JSON Response
+        # Step 5: Final JSON Response
         invoice_data = {
             "status": 200,
             "message": "Invoice generated successfully",
@@ -87,6 +98,7 @@ def generate_invoice(patient_id):
                 "invoice_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             },
             "tests": test_list,
+            "total_fee": total_fee,
             "qr_code": qr_data_url
         }
 
