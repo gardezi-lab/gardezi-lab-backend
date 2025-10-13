@@ -21,7 +21,7 @@ from routes.patient_entry.patient_entry import patient_entry_bp
 from routes.authentication.authentication import authentication_bp
 from routes.invoice.invoice import invoice_bp
 from routes.addresults.addresults import results_bp
-
+from routes.cash.cash import cash_bp
 
 
 
@@ -98,6 +98,7 @@ app.register_blueprint(patient_entry_bp)
 app.register_blueprint(authentication_bp)
 app.register_blueprint(invoice_bp)
 app.register_blueprint(results_bp)
+app.register_blueprint(cash_bp)
 #main
 
 app.register_blueprint(account_bp)

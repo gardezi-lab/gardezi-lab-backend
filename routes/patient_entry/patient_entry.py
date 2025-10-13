@@ -170,10 +170,11 @@ def get_patient_tests(patient_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # ✅ Sirf un tests ko lao jin ka result patient_results me abhi tak add nahi hua
+        # ✅ Patient ke tests fetch karo sath test_profile_id (tp.id)
         query = """
         SELECT 
-            pt.id AS patient_test_id, 
+            pt.id AS patient_test_id,
+            tp.id AS test_profile_id,
             tp.test_name
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
@@ -183,7 +184,15 @@ def get_patient_tests(patient_id):
         tests = cursor.fetchall()
 
         cursor.close()
-        return jsonify(tests), 200
+
+        if not tests:
+            return jsonify({"message": "No tests found for this patient"}), 404
+
+        return jsonify({
+            "message": "Patient tests fetched successfully",
+            "patient_id": patient_id,
+            "tests": tests
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
