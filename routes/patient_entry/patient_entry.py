@@ -317,7 +317,64 @@ def add_or_update_result(patient_test_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+#-------------------- GET patient test parameter result by patient_test_id -----
+@patient_entry_bp.route('/get_test_results/<int:patient_test_id>/', methods=['GET'])
+def get_test_results(patient_test_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
+        # --- Step 1: Fetch patient test results ---
+        query = """
+            SELECT 
+                pr.id AS result_id,
+                pr.patient_id,
+                pr.patient_test_id,
+                pr.parameter_id,
+                p.parameter_name,
+                p.unit,
+                p.normalvalue,
+                pr.result_value,
+                pr.test_profile_id,
+                tp.test_name,
+                pr.created_at
+            FROM patient_results pr
+            LEFT JOIN parameters p ON pr.parameter_id = p.id
+            LEFT JOIN test_profiles tp ON pr.test_profile_id = tp.id
+            WHERE pr.patient_test_id = %s
+        """
+        cursor.execute(query, (patient_test_id,))
+        results = cursor.fetchall()
+
+        if not results:
+            return jsonify({"message": "No test results found for this patient_test_id"}), 404
+
+        # --- Step 2: Format the response ---
+        formatted = []
+        for r in results:
+            formatted.append({
+                "result_id": r["result_id"],
+                "patient_id": r["patient_id"],
+                "patient_test_id": r["patient_test_id"],
+                "test_profile_id": r["test_profile_id"],
+                "test_name": r["test_name"],
+                "parameter_id": r["parameter_id"],
+                "parameter_name": r["parameter_name"],
+                "unit": r["unit"],
+                "normalvalue": r["normalvalue"],
+                "result_value": r["result_value"],
+                "created_at": r["created_at"]
+            })
+
+        cursor.close()
+        return jsonify({
+            "message": "Test results fetched successfully",
+            "patient_test_id": patient_test_id,
+            "results": formatted
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ------------------- Get All Patient Entries (Search + Pagination) ------------------ #
 @patient_entry_bp.route('/', methods=['GET'])
