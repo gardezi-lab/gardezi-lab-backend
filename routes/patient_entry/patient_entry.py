@@ -90,14 +90,14 @@ def create_patient_entry():
             test_name = test_obj.get("name")
 
             # Fetch test info
-            cursor.execute("SELECT id, fee FROM test_profiles WHERE test_name = %s LIMIT 1", (test_name,))
+            cursor.execute("SELECT id, fee FROM test_profiles WHERE id = %s LIMIT 1", (test_name,))
             row = cursor.fetchone()
 
             if row:
                 test_id = row['id']
                 fee = int(row['fee'])
                 cursor.execute(
-                    "INSERT INTO patient_tests (patient_id, test_id, verified) VALUES (%s, %s, %s)",
+                    "INSERT INTO patient_tests (patient_id, test_id, status) VALUES (%s, %s, %s)",
                     (patient_id, test_id, "Unverified")
                 )
                 patient_test_id = cursor.lastrowid
@@ -198,50 +198,52 @@ def get_patient_tests(patient_id):
         return jsonify({"error": str(e)}), 500
 
 #------------------ GET patient selected tests parameter by patient_test_id ---
-@patient_entry_bp.route('/test_parameters/<int:patient_test_id>/', methods=['GET'])
-def get_test_parameters(patient_test_id):
+@patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>', methods=['GET'])
+def get_test_parameters(test_id, patient_id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        #  Step 1: test_id nikal lo patient_tests se
+        # Step 1: Fetch all parameters for this test_id
         cursor.execute("""
-            SELECT test_id 
-            FROM patient_tests 
-            WHERE id = %s
-        """, (patient_test_id,))
-        test_row = cursor.fetchone()
-
-        if not test_row:
-            return jsonify({"error": "Invalid patient_test_id"}), 404
-
-        test_id = test_row['test_id']
-
-        #  Step 2: ab os test ke parameters lao
-        cursor.execute("""
-            SELECT 
-                tp.id AS parameter_id,
-                tp.parameter_name,
-                tp.unit,
-                tp.normalvalue,
-                tp.default_value
-            FROM parameters tp
-            WHERE tp.test_profile_id = %s
+            SELECT id, parameter_name, unit, normalvalue, default_value
+            FROM parameters
+            WHERE test_profile_id = %s
         """, (test_id,))
-
         parameters = cursor.fetchall()
+
+        # Step 2: Fetch existing results for this patient + test
+        cursor.execute("""
+            SELECT parameter_id, result_value
+            FROM patient_results
+            WHERE patient_id = %s AND test_profile_id = %s
+        """, (patient_id, test_id))
+        results = cursor.fetchall()
+
+        # Convert results into a quick lookup dictionary
+        results_dict = {r['parameter_id']: r['result_value'] for r in results}
+
+        # Step 3: Replace default_value if result exists
+        updated_parameters = []
+        for param in parameters:
+            parameter_id = param['id']
+            if parameter_id in results_dict:
+                param['default_value'] = results_dict[parameter_id]
+            updated_parameters.append(param)
+
         cursor.close()
 
         return jsonify({
-            "patient_test_id": patient_test_id,
             "test_id": test_id,
-            "parameters": parameters
+            "patient_id": patient_id,
+            "parameters": updated_parameters
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 #---------------------Add result of patient selected test parameters by patient_test_id----
-@patient_entry_bp.route('/test_results/<int:patient_test_id>/', methods=['POST'])
+@patient_entry_bp.route('/test_results/<int:patient_test_id>', methods=['POST'])
 def add_or_update_result(patient_test_id):
     try:
         mysql = current_app.mysql
@@ -296,16 +298,16 @@ def add_or_update_result(patient_test_id):
             # Check if record already exists
             cursor.execute("""
                 SELECT id FROM patient_results
-                WHERE patient_test_id = %s AND parameter_id = %s
-            """, (patient_test_id, parameter_id))
+                WHERE patient_test_id = %s AND parameter_id = %s AND patient_id = %s
+            """, (patient_test_id, parameter_id, patient_id))
             existing = cursor.fetchone()
             print(existing)
             if existing:
                 cursor.execute("""
                     UPDATE patient_results
-                    SET result_value = %s, patient_id = %s, test_profile_id = %s
+                    SET result_value = %s
                     WHERE id = %s
-                """, (result_value, patient_id, test_profile_id, existing['id']))
+                """, (result_value, existing['id']))
             else:
                 cursor.execute("""
                     INSERT INTO patient_results
@@ -327,8 +329,8 @@ def add_or_update_result(patient_test_id):
         return jsonify({"error": str(e)}), 500
 
 #-------------------- GET patient test parameter result by patient_test_id -----
-@patient_entry_bp.route('/get_test_results/<int:patient_test_id>/', methods=['GET'])
-def get_test_results(patient_test_id):
+@patient_entry_bp.route('/get_test_results/<int:patient_id>/', methods=['GET'])
+def get_test_results(patient_id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -350,13 +352,13 @@ def get_test_results(patient_test_id):
             FROM patient_results pr
             LEFT JOIN parameters p ON pr.parameter_id = p.id
             LEFT JOIN test_profiles tp ON pr.test_profile_id = tp.id
-            WHERE pr.patient_test_id = %s
+            WHERE pr.patient_id = %s
         """
-        cursor.execute(query, (patient_test_id,))
+        cursor.execute(query, (patient_id,))
         results = cursor.fetchall()
 
         if not results:
-            return jsonify({"message": "No test results found for this patient_test_id"}), 404
+            return jsonify({"message": "No test results found for this patient_id"}), 404
 
         # --- Step 2: Format the response ---
         formatted = []
@@ -378,7 +380,7 @@ def get_test_results(patient_test_id):
         cursor.close()
         return jsonify({
             "message": "Test results fetched successfully",
-            "patient_test_id": patient_test_id,
+            "patient_id": patient_id,
             "results": formatted
         }), 200
 
