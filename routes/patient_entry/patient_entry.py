@@ -14,6 +14,7 @@ mysql = MySQL()
 
 # ------------------- Create Patient Entry ------------------ #
 @patient_entry_bp.route('/', methods=['POST'])
+# from flask import request, jsonify, current_app
 def create_patient_entry():
     try:
         data = request.get_json()
@@ -33,8 +34,10 @@ def create_patient_entry():
         priority = data.get('priority')
         remarks = data.get('remarks')
         discount = int(data.get('discount', 0))
+        total_fee = int(data.get('total_fee', 0))
         paid = int(data.get('paid', 0))
-        test = data.get('test', [])
+        test_list = data.get('test', [])
+        print("Payload received:", data)
 
         # --- Validations ---
         errors = []
@@ -56,80 +59,65 @@ def create_patient_entry():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # --- Step 1: Insert Patient without MR_number & total_fee ---
+        # --- Step 1: Insert Patient ---
         insert_query = """
             INSERT INTO patient_entry 
             (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender,
              email, address, package, sample, priority, remarks,
              discount, paid, total_fee)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
             cell, patient_name, father_hasband_MR, age, company, reffered_by,
             gender, email, address, package, sample, priority, remarks,
-            discount, paid
+            discount, paid, total_fee
         ))
 
-        # --- Step 2: Get the new patient_id ---
+        # --- Step 2: Get Patient ID ---
         patient_id = cursor.lastrowid
 
-        # --- Step 3: Generate MR_number ---
+        # --- Step 3: Generate MR Number ---
         prefix = "2025-GL-"
         MR_number = f"{prefix}{patient_id}"
 
-        # --- Step 4: Update MR_number ---
         cursor.execute(
             "UPDATE patient_entry SET MR_number = %s WHERE id = %s",
             (MR_number, patient_id)
         )
 
-        # --- Step 5: Insert Tests & Calculate Total Fee ---
-        total_fee = 0
-        tests_list = []
-        for test_obj in test:
+        # --- Step 4: Insert Tests ---
+       
+        inserted_tests = []
+
+        for test_obj in test_list:
+            test_id = test_obj.get("id")
             test_name = test_obj.get("name")
+ 
 
-            # Fetch test info
-            cursor.execute("SELECT id, fee FROM test_profiles WHERE id = %s LIMIT 1", (test_name,))
-            row = cursor.fetchone()
+            # Insert test record for this patient
+            cursor.execute("""
+                INSERT INTO patient_tests 
+                (patient_id, test_id, status)
+                VALUES (%s, %s, %s)
+            """, (patient_id, test_id,"Unverified"))
 
-            if row:
-                test_id = row['id']
-                fee = int(row['fee'])
-                cursor.execute(
-                    "INSERT INTO patient_tests (patient_id, test_id, status) VALUES (%s, %s, %s)",
-                    (patient_id, test_id, "Unverified")
-                )
-                patient_test_id = cursor.lastrowid
-                tests_list.append({
-                    "patient_test_id": patient_test_id,
-                    "test_name": test_name,
-                    "fee": fee
-                })
-                total_fee += fee
-            else:
-                tests_list.append({
-                    "patient_test_id": None,
-                    "test_name": test_name,
-                    "fee": "Not Found"
-                })
+            patient_test_id = cursor.lastrowid
+       
 
-        # --- Step 6: Update total_fee in patient_entry ---
+            inserted_tests.append({
+                "patient_test_id": patient_test_id,
+                "test_id": test_id,
+                "test_name": test_name,
+            })
+
+    
+        # --- Step 6: Insert into Cash Table ---
         cursor.execute(
-            "UPDATE patient_entry SET total_fee = %s WHERE id = %s",
-            (total_fee, patient_id)
+            "INSERT INTO cash (description, dr) VALUES (%s, %s)",
+            (MR_number, total_fee)
         )
 
-        # --- Step 7: Insert into cash table ---
-        cursor.execute(
-            """
-            INSERT INTO cash (description, dr)
-            VALUES (%s, %s)
-            """,
-            (f"{MR_number}", total_fee)
-        )
-
-        # --- Step 8: Log Activity ---
+        # --- Step 7: Log Activity ---
         now_time = datetime.now()
         cursor.execute(
             "INSERT INTO patient_activity_log (patient_id, activity, created_at) VALUES (%s, %s, %s)",
@@ -143,7 +131,7 @@ def create_patient_entry():
             "message": "Patient entry created successfully",
             "patient_id": patient_id,
             "MR_number": MR_number,
-            "tests": tests_list,
+            "tests": inserted_tests,
             "total_fee": total_fee,
             "discount": discount,
             "paid": paid
@@ -160,7 +148,6 @@ def create_patient_entry():
             except Exception:
                 pass
         return jsonify({"error": str(e)}), 500
-
 
 
 #-------------------- GET selected test of patient by patient_id -----------------------
