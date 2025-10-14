@@ -157,7 +157,7 @@ def get_patient_tests(patient_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # ✅ Patient ke tests fetch karo sath test_profile_id (tp.id)
+        #  Patient ke tests fetch karo sath test_profile_id (tp.id)
         query = """
         SELECT 
             pt.id AS patient_test_id,
@@ -314,6 +314,37 @@ def add_or_update_result(patient_test_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#------------------- Update the test fees --------------
+@patient_entry_bp.route("/update_fee/<int:id>", methods=["PUT"])
+def update_fee(id):
+    try:
+        data = request.get_json()
+        new_paid = int(data.get("paid"))
+
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT paid, total_fee, discount FROM patient_entry WHERE id=%s", (id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"message": "Record not found"}), 404
+
+        old_paid, total_fee, discount = result
+        net_total = total_fee - discount
+        total_paid = old_paid + new_paid
+        remaining = max(net_total - total_paid, 0)
+
+        if old_paid >= net_total:
+            return jsonify({"message": "Already paid"}), 200
+
+        cursor.execute("UPDATE patient_entry SET paid = %s WHERE id=%s", (total_paid, id))
+        mysql.connection.commit()
+        cursor.close()
+
+        return jsonify({"message": "Updated", "paid": total_paid, "remain": remaining, "discount": discount, "total": total_fee}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    
+        
 
 #-------------------- GET patient test parameter result by patient_test_id -----
 @patient_entry_bp.route('/get_test_results/<int:patient_id>/', methods=['GET'])
@@ -381,43 +412,51 @@ def get_all_patient_entries():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
 
         offset = (current_page - 1) * record_per_page
 
-        # base query
         base_query = "SELECT * FROM patient_entry"
         where_clauses = []
         values = []
 
         if search:
             where_clauses.append(
-                "(cell LIKE %s OR patient_name LIKE %s OR father_hasband_MR LIKE %s OR company LIKE %s OR reffered_by LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
+                "(patient_name LIKE %s OR father_hasband_MR LIKE %s OR company LIKE %s OR reffered_by LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
             )
-            for _ in range(13):  # total searchable fields
+            for _ in range(13):
                 values.append(f"%{search}%")
 
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
 
-        # count total
         count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
         cursor.execute(count_query, values)
         total_records = cursor.fetchone()["total"]
 
-        # pagination
         base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
         cursor.execute(base_query, values)
-        rows = cursor.fetchall()
+        patients = cursor.fetchall()
+
+        # 🔹 Fetch each patient's tests
+        test_cursor = mysql.connection.cursor(DictCursor)
+        for patient in patients:
+            test_cursor.execute("""
+                SELECT pt.id AS patient_test_id, tp.test_name, tp.fee
+                FROM patient_tests pt
+                JOIN test_profiles tp ON pt.test_id = tp.id
+                WHERE pt.patient_id = %s
+            """, (patient["id"],))
+            tests = test_cursor.fetchall()
+            patient["tests"] = tests  
 
         total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
-            "data": rows,
+            "data": patients,
             "totalRecords": total_records,
             "totalPages": total_pages,
             "currentPage": current_page
@@ -427,12 +466,14 @@ def get_all_patient_entries():
         return jsonify({"error": str(e)}), 500
 
 
+
 # ------------------- Get Patient Entry by ID ------------------ #
 @patient_entry_bp.route('/<int:id>', methods=['GET'])
 def patient_get_by_id(id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
+        
         cursor.execute("SELECT * FROM patient_entry WHERE id = %s", (id,))
         row = cursor.fetchone()
         cursor.close()

@@ -28,7 +28,7 @@ def create_user():
             return jsonify({"error": "All fields except password are required"}), 400
 
         if isinstance(name, int) or isinstance(user_name, int):
-            return jsonify({"message": "Name or username cannot be number"}), 400
+            return jsonify({"message": "Name  or username cannot be number"}), 400
 
         if isinstance(age, str):
             return jsonify({"message": "Age cannot be string"}), 400
