@@ -44,7 +44,7 @@ def get_departments():
         cursor.execute(base_query, values)
         departments = cursor.fetchall()
         #
-        #  Transform data into custom format
+        # Transform data into custom format
         formatted_departments = [
             {
                 "id": dept["id"],

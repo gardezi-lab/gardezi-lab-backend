@@ -19,5 +19,3 @@ def get_data_cash():
                         "result": result})
     except Exception as e:
         return jsonify({"error": str(e)})
-        
-        
