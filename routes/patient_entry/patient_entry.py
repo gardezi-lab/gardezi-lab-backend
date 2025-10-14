@@ -428,7 +428,7 @@ def get_all_patient_entries():
 
         if search:
             where_clauses.append(
-                "(patient_name LIKE %s OR father_hasband_MR LIKE %s OR company LIKE %s OR reffered_by LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
+                "(patient_name LIKE %s OR father_hasband_MR LIKE %s OR company_id LIKE %s OR users_id LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package_id LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
             )
             for _ in range(13):
                 values.append(f"%{search}%")
@@ -497,7 +497,7 @@ def patient_get_by_id(id):
         response = {
             "patient_entry": patient,
             "tests": test_ids,
-            "reffered_by_id": patient.get("users_id"),
+            "users_id": patient.get("users_id"),
             "company_id": patient.get("company_id"),
             "package_id": patient.get("package_id")
         }
