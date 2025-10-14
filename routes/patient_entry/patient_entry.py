@@ -24,12 +24,12 @@ def create_patient_entry():
         patient_name = data.get('patient_name')
         father_hasband_MR = data.get('father_hasband_MR')
         age = data.get('age')
-        company = data.get('company')
-        reffered_by = data.get('reffered_by')
+        company_id = data.get('company_id')
+        users_id = data.get('reffered_by_id')
         gender = data.get('gender')
         email = data.get('email')
         address = data.get('address')
-        package = data.get('package')
+        package_id = data.get('package_id')
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
@@ -49,8 +49,8 @@ def create_patient_entry():
             errors.append("Gender is required.")
         if not sample or not str(sample).strip():
             errors.append("Sample is required.")
-        if not reffered_by or not str(reffered_by).strip():
-            errors.append("Referred By is required.")
+        if not users_id:
+            errors.append("users is required.")
 
         if errors:
             return jsonify({"errors": errors}), 400
@@ -61,17 +61,21 @@ def create_patient_entry():
 
         # --- Step 1: Insert Patient ---
         insert_query = """
-            INSERT INTO patient_entry 
-            (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender,
-             email, address, package, sample, priority, remarks,
-             discount, paid, total_fee)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
+        INSERT INTO patient_entry 
+    (cell, patient_name, father_hasband_MR, age, gender,
+     email, address, sample, priority, remarks,
+     discount, paid, total_fee, users_id, company_id, package_id)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
         cursor.execute(insert_query, (
-            cell, patient_name, father_hasband_MR, age, company, reffered_by,
-            gender, email, address, package, sample, priority, remarks,
-            discount, paid, total_fee
-        ))
+    cell, patient_name, father_hasband_MR, age,
+    gender, email, address, sample, priority, remarks,
+    discount, paid, total_fee,
+    users_id,  
+    company_id,      
+    package_id       
+))
+
 
         # --- Step 2: Get Patient ID ---
         patient_id = cursor.lastrowid
@@ -419,7 +423,7 @@ def get_all_patient_entries():
         offset = (current_page - 1) * record_per_page
 
         base_query = "SELECT * FROM patient_entry"
-        where_clauses = []
+        where_clauses = [] 
         values = []
 
         if search:
@@ -473,32 +477,33 @@ def patient_get_by_id(id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
-        
+
+        # Get patient record
         cursor.execute("SELECT * FROM patient_entry WHERE id = %s", (id,))
-        row = cursor.fetchone()
+        patient = cursor.fetchone()
+
+        if not patient:
+            cursor.close()
+            return jsonify({"error": "Patient entry not found"}), 404
+
+        # Get patient tests
+        cursor.execute("SELECT test_id FROM patient_tests WHERE patient_id = %s", (id,))
+        test_rows = cursor.fetchall()
+        test_ids = [t["test_id"] for t in test_rows]
+
         cursor.close()
-        if row:
-            return jsonify({"patient_entry": row}), 200
-            patient_entry = {
-                "id": row[0],
-                "cell": row[1],
-                "patient_name": row[2],
-                "father_hasband_MR": row[3],
-                "age": row[4],
-                "company": row[5],
-                "reffered_by": row[6],
-                "gender": row[7],
-                "email": row[8],
-                "address": row[9],
-                "package": row[10],
-                "sample": row[11],
-                "priority": row[12],
-                "remarks": row[13],
-                "test": row[14],
-                "status" : 200
-            }
-            return jsonify({"patient_entry": patient_entry}), 200
-        return jsonify({"error": "Patient entry not found"}), 404
+
+        # Directly take IDs from patient_entry record
+        response = {
+            "patient_entry": patient,
+            "tests": test_ids,
+            "reffered_by_id": patient.get("users_id"),
+            "company_id": patient.get("company_id"),
+            "package_id": patient.get("package_id")
+        }
+
+        return jsonify(response), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
