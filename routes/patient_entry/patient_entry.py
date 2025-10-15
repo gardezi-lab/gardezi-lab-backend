@@ -326,24 +326,30 @@ def update_fee(id):
         new_paid = int(data.get("paid"))
 
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT paid, total_fee, discount FROM patient_entry WHERE id=%s", (id,))
+        cursor.execute("SELECT paid, total_fee FROM patient_entry WHERE id=%s", (id,))
         result = cursor.fetchone()
         if not result:
             return jsonify({"message": "Record not found"}), 404
 
-        old_paid, total_fee, discount = result
-        net_total = total_fee - discount
+        old_paid, total_fee = result
         total_paid = old_paid + new_paid
-        remaining = max(net_total - total_paid, 0)
-
-        if old_paid >= net_total:
-            return jsonify({"message": "Already paid"}), 200
-
+        total_result = total_paid - total_fee
+        
+        paid = total_paid
+        # print("old_paid",old_paid)
+        # print("total_fee",total_fee)
+        # print("total_paid",total_paid)
+        # print("new_paid",new_paid)
+        # print("total_result",total_result)
+        # print("paid",paid)
+        
+      
+        
         cursor.execute("UPDATE patient_entry SET paid = %s WHERE id=%s", (total_paid, id))
         mysql.connection.commit()
         cursor.close()
 
-        return jsonify({"message": "Updated", "paid": total_paid, "remain": remaining, "discount": discount, "total": total_fee}), 200
+        return jsonify({"message": "Updated", "paid": total_paid,"total": total_fee}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500        
 
@@ -413,32 +419,32 @@ def get_all_patient_entries():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        search = request.args.get("search", "", type=str)
-        current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        # search = request.args.get("search", "", type=str)
+        # current_page = request.args.get("currentpage", 1, type=int)
+        # record_per_page = request.args.get("recordperpage", 10, type=int)
 
-        offset = (current_page - 1) * record_per_page
+        # offset = (current_page - 1) * record_per_page
 
         base_query = "SELECT * FROM patient_entry"
         where_clauses = [] 
         values = []
 
-        if search:
-            where_clauses.append(
-                "(patient_name LIKE %s OR father_hasband_MR LIKE %s OR company_id LIKE %s OR users_id LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package_id LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
-            )
-            for _ in range(13):
-                values.append(f"%{search}%")
+        # if search:
+        #     where_clauses.append(
+        #         "(patient_name LIKE %s OR father_hasband_MR LIKE %s OR company_id LIKE %s OR users_id LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package_id LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
+        #     )
+        #     for _ in range(13):
+        #         values.append(f"%{search}%")
 
-        if where_clauses:
-            base_query += " WHERE " + " AND ".join(where_clauses)
+        # if where_clauses:
+        #     base_query += " WHERE " + " AND ".join(where_clauses)
 
-        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
-        cursor.execute(count_query, values)
-        total_records = cursor.fetchone()["total"]
+        # count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
+        # cursor.execute(count_query, values)
+        # total_records = cursor.fetchone()["total"]
 
-        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
-        values.extend([record_per_page, offset])
+        # base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        # values.extend([record_per_page, offset])
         cursor.execute(base_query, values)
         patients = cursor.fetchall()
 
@@ -454,13 +460,13 @@ def get_all_patient_entries():
             tests = test_cursor.fetchall()
             patient["tests"] = tests  
 
-        total_pages = math.ceil(total_records / record_per_page)
+        # total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
             "data": patients,
-            "totalRecords": total_records,
-            "totalPages": total_pages,
-            "currentPage": current_page
+            # "totalRecords": total_records,
+            # "totalPages": total_pages,
+            # "currentPage": current_page
         }), 200
 
     except Exception as e:
@@ -560,11 +566,13 @@ def update_patient_entry(id):
             test_row = cursor.fetchone()
             if test_row:
                 test_id = test_row[0]
+                print("test_id", test_id)
                 cursor.execute("""
                     UPDATE test_profiles
                     SET test_name=%s, delivery_time=%s, fee=%s, sample_required = %s
                     WHERE id=%s
                 """, (test_name,sample_required, delivery_time, fee, test_id))
+                print("this is test_id", test_id)
 
         mysql.connection.commit()
         cursor.close()
