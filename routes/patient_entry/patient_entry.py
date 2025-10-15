@@ -345,10 +345,7 @@ def update_fee(id):
 
         return jsonify({"message": "Updated", "paid": total_paid, "remain": remaining, "discount": discount, "total": total_fee}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    
-        
+        return jsonify({"error": str(e)}), 500        
 
 #-------------------- GET patient test parameter result by patient_test_id -----
 @patient_entry_bp.route('/get_test_results/<int:patient_id>/', methods=['GET'])
@@ -449,7 +446,7 @@ def get_all_patient_entries():
         test_cursor = mysql.connection.cursor(DictCursor)
         for patient in patients:
             test_cursor.execute("""
-                SELECT pt.id AS patient_test_id, tp.test_name, tp.fee
+                SELECT pt.id AS patient_test_id, tp.test_name,tp.delivery_time,tp.sample_required, tp.fee
                 FROM patient_tests pt
                 JOIN test_profiles tp ON pt.test_id = tp.id
                 WHERE pt.patient_id = %s
@@ -513,38 +510,72 @@ def patient_get_by_id(id):
 def update_patient_entry(id):
     try:
         data = request.get_json()
+
+        #  patient_entry table ke fields
         cell = data.get('cell')
         patient_name = data.get('patient_name')
         father_hasband_MR = data.get('father_hasband_MR')
         age = data.get('age')
-        company = data.get('company')
-        reffered_by = data.get('reffered_by')
         gender = data.get('gender')
         email = data.get('email')
         address = data.get('address')
-        package = data.get('package')
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
-        test = data.get('test')
+        discount = data.get('discount')
+        paid = data.get('paid')
+        total_fee = data.get('total_fee')
+        company_id = data.get('company_id')
+        package_id = data.get('package_id')
+        users_id = data.get('users_id')
+        tests = data.get('tests', [])
 
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
+
+        #  patient_entry table update
         update_query = """
             UPDATE patient_entry
-            SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, company=%s,
-                reffered_by=%s, gender=%s, email=%s, address=%s, package=%s,
-                sample=%s, priority=%s, remarks=%s, test=%s
+            SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, gender=%s,
+                email=%s, address=%s, sample=%s, priority=%s, remarks=%s,
+                discount=%s, paid=%s, total_fee=%s, company_id=%s,
+                package_id=%s, users_id=%s
             WHERE id=%s
         """
-        cursor.execute(update_query, (cell, patient_name, father_hasband_MR, age, company, reffered_by, gender, email, address, package, sample, priority, remarks, test, id))
+        cursor.execute(update_query, (
+            cell, patient_name, father_hasband_MR, age, gender, email, address,
+            sample, priority, remarks, discount, paid, total_fee,
+            company_id, package_id, users_id, id
+        ))
+
+        #  test_profiles table update
+        for test in tests:
+            test_name = test.get('test_name')
+            delivery_time = test.get('delivery_time')
+            fee = test.get('fee')
+            patient_test_id = test.get('patient_test_id')
+
+            # pehle patient_tests se test_id nikalte hain
+            cursor.execute("SELECT test_id FROM patient_tests WHERE id=%s", (patient_test_id,))
+            test_row = cursor.fetchone()
+            if test_row:
+                test_id = test_row[0]
+                cursor.execute("""
+                    UPDATE test_profiles
+                    SET test_name=%s, delivery_time=%s, fee=%s, sample_required = %s
+                    WHERE id=%s
+                """, (test_name,sample_required, delivery_time, fee, test_id))
+
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Patient entry updated successfully",
-                        "status": 200}), 200
+
+        return jsonify({
+            "message": "Patient entry aur test_profiles dono update ho gaye",
+            "status": 200
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # ------------------- Delete Patient Entry by ID ------------------ #
 @patient_entry_bp.route('/<int:id>', methods=['DELETE'])
