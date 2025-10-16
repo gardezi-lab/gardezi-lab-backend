@@ -2,7 +2,7 @@ import math
 from flask import Flask, request, jsonify, Blueprint, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
-from datetime import datetime
+from datetime import datetime, timedelta
 import MySQLdb
 import json
 import random
@@ -529,6 +529,7 @@ def update_patient_entry(id):
         data = request.get_json()
 
         #  patient_entry table ke fields
+        patient_id = id
         cell = data.get('cell')
         patient_name = data.get('patient_name')
         father_hasband_MR = data.get('father_hasband_MR')
@@ -562,30 +563,22 @@ def update_patient_entry(id):
         cursor.execute(update_query, (
             cell, patient_name, father_hasband_MR, age, gender, email, address,
             sample, priority, remarks, discount, paid, total_fee,
-            company_id, package_id, users_id, id
+            company_id, package_id, users_id, patient_id  
         ))
+        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s", (patient_id,))
 
         #  test_profiles table update
         for test in tests:
-            test_name = test.get('test_name')
-            delivery_time = test.get('delivery_time')
-            fee = test.get('fee')
-            patient_test_id = test.get('patient_test_id')
-
-            # pehle patient_tests se test_id nikalte hain
-            cursor.execute("SELECT test_id FROM patient_tests WHERE id=%s", (patient_test_id,))
-            test_row = cursor.fetchone()
-            if test_row:
-                test_id = test_row[0]
-                print("test_id", test_id)
-                cursor.execute("""
-                    UPDATE test_profiles
-                    SET test_name=%s, delivery_time=%s, fee=%s, sample_required = %s
-                    WHERE id=%s
-                """, (test_name,sample_required, delivery_time, fee, test_id))
-                print("this is test_id", test_id)
-
-        mysql.connection.commit()
+            delivery_time_hours = test.get('testDeliveryTime', 0)
+            delivery_datetime = datetime.now() + timedelta(hours=delivery_time_hours)
+            test_id = test.get('id')
+            
+            
+            
+            
+            cursor.execute("INSERT INTO patient_tests (patient_id, test_id, reporting_time)VALUES(%s, %s, %s)",(patient_id, test_id, delivery_datetime))
+            cursor.connection.commit()
+            
         cursor.close()
 
         return jsonify({
