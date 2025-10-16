@@ -425,40 +425,20 @@ def get_all_patient_entries():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # search = request.args.get("search", "", type=str)
-        # current_page = request.args.get("currentpage", 1, type=int)
-        # record_per_page = request.args.get("recordperpage", 10, type=int)
-
-        # offset = (current_page - 1) * record_per_page
-
-        base_query = "SELECT * FROM patient_entry"
-        where_clauses = [] 
-        values = []
-
-        # if search:
-        #     where_clauses.append(
-        #         "(patient_name LIKE %s OR father_hasband_MR LIKE %s OR company_id LIKE %s OR users_id LIKE %s OR gender LIKE %s OR email LIKE %s OR address LIKE %s OR package_id LIKE %s OR sample LIKE %s OR priority LIKE %s OR remarks LIKE %s OR test LIKE %s)"
-        #     )
-        #     for _ in range(13):
-        #         values.append(f"%{search}%")
-
-        # if where_clauses:
-        #     base_query += " WHERE " + " AND ".join(where_clauses)
-
-        # count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
-        # cursor.execute(count_query, values)
-        # total_records = cursor.fetchone()["total"]
-
-        # base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
-        # values.extend([record_per_page, offset])
-        cursor.execute(base_query, values)
+        base_query = "SELECT * FROM patient_entry ORDER BY id DESC"  
+        cursor.execute(base_query)
         patients = cursor.fetchall()
 
         # 🔹 Fetch each patient's tests
         test_cursor = mysql.connection.cursor(DictCursor)
         for patient in patients:
             test_cursor.execute("""
-                SELECT pt.id AS patient_test_id, tp.test_name,tp.delivery_time,tp.sample_required, tp.fee
+                SELECT 
+                    pt.id AS patient_test_id, 
+                    tp.test_name,
+                    tp.delivery_time,
+                    tp.sample_required, 
+                    tp.fee
                 FROM patient_tests pt
                 JOIN test_profiles tp ON pt.test_id = tp.id
                 WHERE pt.patient_id = %s
@@ -466,17 +446,13 @@ def get_all_patient_entries():
             tests = test_cursor.fetchall()
             patient["tests"] = tests  
 
-        # total_pages = math.ceil(total_records / record_per_page)
-
         return jsonify({
-            "data": patients,
-            # "totalRecords": total_records,
-            # "totalPages": total_pages,
-            # "currentPage": current_page
+            "data": patients
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 
