@@ -19,7 +19,7 @@ def generate_invoice(patient_id):
         cursor.execute("""
             SELECT 
                 id, patient_name, cell, gender, age,  remarks
-                ,reffered_by,MR_number,sample,
+                ,users_id,MR_number,sample,
                 discount, paid, total_fee
             FROM patient_entry
             WHERE id = %s
@@ -96,7 +96,7 @@ def generate_invoice(patient_id):
                 "patient_id": patient['id'],
                 "patient_name": patient['patient_name'],
                 "cell": patient['cell'],
-                "refferd_by" :patient['reffered_by'],
+                "user_id" :patient['users_id'],
                 "gender": patient['gender'],
                 "age": patient['age'],
                 "MR_number": patient['MR_number'],
