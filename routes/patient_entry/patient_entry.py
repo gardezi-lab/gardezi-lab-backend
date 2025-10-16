@@ -526,6 +526,7 @@ def patient_get_by_id(id):
                     "created_at": str(patient["created_at"]),
                     "remarks": patient.get("remarks", ""),
                     "company_id": patient.get("company_id"),
+                    "users_id": patient.get("users_id"),
                     "package_id": patient.get("package_id"),
                     "tests": tests
                 }
