@@ -474,7 +474,7 @@ def patient_get_by_id(id):
         #  Get patient tests with full details by joining test_profiles
         cursor.execute("""
             SELECT 
-                pt.id AS patient_test_id,
+                pt.test_id AS patient_test_id,
                 tp.test_name,
                 tp.sample_required,
                 tp.delivery_time,
