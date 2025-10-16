@@ -33,6 +33,7 @@ def generate_invoice(patient_id):
         cursor.execute("""
             SELECT 
                 pt.id AS patient_test_id, 
+                pt.reporting_time AS reporting_time, 
                 tp.id AS test_id, 
                 tp.test_name,
                 tp.fee,
@@ -53,27 +54,10 @@ def generate_invoice(patient_id):
             fee = int(test.get('fee') or 0)
             total_fee += fee
 
-            cursor.execute("""
-                SELECT 
-                    p.parameter_name,
-                    p.unit,
-                    p.normalvalue,
-                    COALESCE(pr.result_value, 'N/A') AS result_value
-                FROM parameters p
-                LEFT JOIN patient_results pr
-                    ON pr.parameter_id = p.id
-                    AND pr.patient_test_id = %s
-                    AND pr.test_profile_id = p.test_profile_id
-                WHERE p.test_profile_id = %s
-            """, (patient_test_id, test_id))
-
-            parameters = cursor.fetchall()
-
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
-                "delivery_time": test.get('delivery_time'),  # ✅ Added delivery time here
-                "parameters": parameters
+                "delivery_time": test.get('reporting_time')
             })
 
         # Step 4: Generate QR Code

@@ -97,13 +97,14 @@ def create_patient_entry():
             test_id = test_obj.get("id")
             test_name = test_obj.get("name")
  
-
+            delivery_time_hours = test_obj.get('testDeliveryTime', 0)
+            delivery_datetime = datetime.now() + timedelta(hours=delivery_time_hours)
             # Insert test record for this patient
             cursor.execute("""
                 INSERT INTO patient_tests 
-                (patient_id, test_id, status)
-                VALUES (%s, %s, %s)
-            """, (patient_id, test_id,"Unverified"))
+                (patient_id, test_id, status, reporting_time)
+                VALUES (%s, %s, %s,%s)
+            """, (patient_id, test_id,"Unverified", delivery_datetime))
 
             patient_test_id = cursor.lastrowid
        
@@ -161,7 +162,6 @@ def get_patient_tests(patient_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        #  Patient ke tests fetch karo sath test_profile_id (tp.id)
         query = """
         SELECT 
             pt.id AS patient_test_id,
@@ -546,7 +546,7 @@ def update_patient_entry(id):
         company_id = data.get('company_id')
         package_id = data.get('package_id')
         users_id = data.get('users_id')
-        tests = data.get('tests', [])
+        tests = data.get('test', [])
 
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
