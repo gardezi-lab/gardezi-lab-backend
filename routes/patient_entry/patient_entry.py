@@ -241,13 +241,13 @@ def add_or_update_result(patient_test_id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         data = request.get_json()
-        print("Request Data:", data)  # Debug print to show received data
+        print("Request Data:", data)
 
         patient_id = data.get("patient_id")
         results = data.get("results", [])
         parameters = data.get("parameters", [])
         test_profile_id = data.get("test_profile_id")
-        
+
         # If results list is empty, extract from parameters
         if not results and parameters:
             results = [
@@ -255,7 +255,7 @@ def add_or_update_result(patient_test_id):
                 for p in parameters if p.get("parameter_id") and p.get("result_value")
             ]
 
-        print("Extracted Results:", results)  # Debug print
+        print("Extracted Results:", results)
 
         # --- Validation ---
         if not patient_id:
@@ -264,27 +264,21 @@ def add_or_update_result(patient_test_id):
         if not results or not isinstance(results, list):
             return jsonify({"error": "results list is invalid or empty"}), 400
 
-        # --- Step 1: Get test_profile_id from patient_tests table ---
-        # cursor.execute("SELECT test_profile_id FROM patient_tests WHERE id = %s", (patient_test_id,))
-        # test_ref = cursor.fetchone()
-        # if not test_ref:
-        #     return jsonify({"error": "Invalid patient_test_id"}), 400
-
-        # test_profile_id = test_ref['test_profile_id']
-
-        # --- Step 2: Verify that test_profile_id exists in test_profiles ---
+        # --- Step 1: Verify that test_profile_id exists ---
         cursor.execute("SELECT id, test_name FROM test_profiles WHERE id = %s", (test_profile_id,))
         test_profile = cursor.fetchone()
         if not test_profile:
             return jsonify({"error": "Test profile not found"}), 404
 
-        # --- Step 3: Insert/Update results ---
+        test_name = test_profile["test_name"]
+
+        # --- Step 2: Insert/Update results ---
         for result in results:
             parameter_id = result.get("parameter_id")
             result_value = result.get("result_value")
 
             if not parameter_id or result_value in [None, "", "NULL"]:
-                continue  # skip invalid data
+                continue  # skip invalid entries
 
             # Check if record already exists
             cursor.execute("""
@@ -292,13 +286,15 @@ def add_or_update_result(patient_test_id):
                 WHERE patient_test_id = %s AND parameter_id = %s AND patient_id = %s
             """, (patient_test_id, parameter_id, patient_id))
             existing = cursor.fetchone()
-            print(existing)
+
             if existing:
                 cursor.execute("""
                     UPDATE patient_results
                     SET result_value = %s
                     WHERE id = %s
                 """, (result_value, existing['id']))
+
+                activity = f"Updated result for test '{test_name}', parameter_id {parameter_id}"
             else:
                 cursor.execute("""
                     INSERT INTO patient_results
@@ -306,18 +302,28 @@ def add_or_update_result(patient_test_id):
                     VALUES (%s, %s, %s, %s, NOW(), %s, 0)
                 """, (patient_id, patient_test_id, parameter_id, result_value, test_profile_id))
 
+                activity = f"Added new result for test '{test_name}', parameter_id {parameter_id}"
+
+            # --- Step 3: Insert into patient_activity_log ---
+            cursor.execute("""
+                INSERT INTO patient_activity_log (patient_id, activity, created_at)
+                VALUES (%s, %s, NOW())
+            """, (patient_id, activity))
+
+        # --- Step 4: Commit changes ---
         mysql.connection.commit()
         cursor.close()
 
         return jsonify({
             "message": "Results saved successfully",
             "test_profile_id": test_profile_id,
-            "test_name": test_profile["test_name"],
-            "results": results  #  Return the extracted results for confirmation
+            "test_name": test_name,
+            "results": results
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 #------------------- Update the test fees --------------
 @patient_entry_bp.route("/update_fee/<int:id>", methods=["PUT"])
 def update_fee(id):
