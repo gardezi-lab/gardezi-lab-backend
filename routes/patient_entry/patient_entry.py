@@ -25,7 +25,7 @@ def create_patient_entry():
         father_hasband_MR = data.get('father_hasband_MR')
         age = data.get('age')
         company_id = data.get('company_id')
-        users_id = data.get('reffered_by_id')
+        users_id = data.get('users_id')
         gender = data.get('gender')
         email = data.get('email')
         address = data.get('address')
