@@ -190,7 +190,7 @@ def get_patient_tests(patient_id):
 
 #------------------ GET patient selected tests parameter by patient_test_id ---
 @patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>', methods=['GET'])
-def get_test_parameters(test_id, patient_id):
+def get_test_parameters(test_id, patient_id): 
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -481,7 +481,7 @@ def patient_get_by_id(id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # Get patient record
+        #  Get patient record
         cursor.execute("SELECT * FROM patient_entry WHERE id = %s", (id,))
         patient = cursor.fetchone()
 
@@ -489,26 +489,54 @@ def patient_get_by_id(id):
             cursor.close()
             return jsonify({"error": "Patient entry not found"}), 404
 
-        # Get patient tests
-        cursor.execute("SELECT test_id FROM patient_tests WHERE patient_id = %s", (id,))
-        test_rows = cursor.fetchall()
-        test_ids = [t["test_id"] for t in test_rows]
+        #  Get patient tests with full details by joining test_profiles
+        cursor.execute("""
+            SELECT 
+                pt.id AS patient_test_id,
+                tp.test_name,
+                tp.sample_required,
+                tp.delivery_time,
+                tp.fee
+            FROM patient_tests pt
+            JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE pt.patient_id = %s
+        """, (id,))
+        tests = cursor.fetchall()
 
         cursor.close()
 
-        # Directly take IDs from patient_entry record
+        #  Final response format
         response = {
-            "patient_entry": patient,
-            "tests": test_ids,
-            "users_id": patient.get("users_id"),
-            "company_id": patient.get("company_id"),
-            "package_id": patient.get("package_id")
+            "data": [
+                {
+                    "id": patient["id"],
+                    "patient_name": patient["patient_name"],
+                    "father_hasband_MR": patient["father_hasband_MR"],
+                    "age": patient["age"],
+                    "gender": patient["gender"],
+                    "cell": patient["cell"],
+                    "email": patient["email"],
+                    "address": patient["address"],
+                    "sample": patient["sample"],
+                    "priority": patient["priority"],
+                    "discount": patient["discount"],
+                    "paid": patient["paid"],
+                    "total_fee": patient.get("total_fee", 0),
+                    "mr_number": patient["mr_number"],
+                    "created_at": str(patient["created_at"]),
+                    "remarks": patient.get("remarks", ""),
+                    "company_id": patient.get("company_id"),
+                    "package_id": patient.get("package_id"),
+                    "tests": tests
+                }
+            ]
         }
 
         return jsonify(response), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # ------------------- Update Patient Entry by ID ------------------ #
