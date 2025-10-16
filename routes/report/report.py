@@ -6,12 +6,12 @@ from io import BytesIO
 from datetime import datetime
 import MySQLdb.cursors
 
-invoice_bp = Blueprint('invoice', __name__, url_prefix='/api/invoice')
+report_bp = Blueprint('report', __name__, url_prefix='/api/report')
 mysql = MySQL()
 
 # ------------------ Invoice API -------------------
-@invoice_bp.route('/<int:patient_id>', methods=['GET'])
-def generate_invoice(patient_id):
+@report_bp.route('/<int:patient_id>', methods=['GET'])
+def generate_report(patient_id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
@@ -33,7 +33,6 @@ def generate_invoice(patient_id):
         cursor.execute("""
             SELECT 
                 pt.id AS patient_test_id, 
-                pt.reporting_time AS reporting_time, 
                 tp.id AS test_id, 
                 tp.test_name,
                 tp.fee,
@@ -54,10 +53,27 @@ def generate_invoice(patient_id):
             fee = int(test.get('fee') or 0)
             total_fee += fee
 
+            cursor.execute("""
+                SELECT 
+                    p.parameter_name,
+                    p.unit,
+                    p.normalvalue,
+                    pr.result_value AS result_value
+                FROM parameters p
+                LEFT JOIN patient_results pr
+                    ON pr.parameter_id = p.id
+                    AND pr.patient_test_id = %s
+                    AND pr.test_profile_id = p.test_profile_id
+                WHERE p.test_profile_id = %s
+            """, (patient_test_id, test_id))
+
+            parameters = cursor.fetchall()
+
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
-                "delivery_time": test('reporting_time')
+                "delivery_time": test.get('reporting_time'),  
+                "parameters": parameters
             })
 
         # Step 4: Generate QR Code
