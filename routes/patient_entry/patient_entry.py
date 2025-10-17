@@ -205,21 +205,32 @@ def get_test_parameters(test_id, patient_id):
 
         # Step 2: Fetch existing results for this patient + test
         cursor.execute("""
-            SELECT parameter_id, result_value
+            SELECT parameter_id, result_value,cutoff_value
             FROM patient_results
             WHERE patient_id = %s AND test_profile_id = %s
         """, (patient_id, test_id))
         results = cursor.fetchall()
-
+        
         # Convert results into a quick lookup dictionary
-        results_dict = {r['parameter_id']: r['result_value'] for r in results}
+        results_dict = {
+        r['parameter_id']: {
+            'result_value': r['result_value'],
+            'cutoff_value': r.get('cutoff_value')
+        }
+        for r in results
+        }
 
         # Step 3: Replace default_value if result exists
         updated_parameters = []
         for param in parameters:
             parameter_id = param['id']
+            
             if parameter_id in results_dict:
-                param['default_value'] = results_dict[parameter_id]
+             param['default_value'] = results_dict[parameter_id]['result_value']
+             param['cutoff_value'] = results_dict[parameter_id]['cutoff_value']
+            else:
+             param['cutoff_value'] = None  # explicitly set to null
+                
             updated_parameters.append(param)
 
         cursor.close()
@@ -241,18 +252,20 @@ def add_or_update_result(patient_test_id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         data = request.get_json()
-        print("Request Data:", data)
+        
 
         patient_id = data.get("patient_id")
         results = data.get("results", [])
+        cutoff_value = data.get("cutoff_value", [])
         parameters = data.get("parameters", [])
         test_profile_id = data.get("test_profile_id")
+        
 
         # If results list is empty, extract from parameters
         if not results and parameters:
             results = [
-                {"parameter_id": p.get("parameter_id"), "result_value": p.get("result_value")}
-                for p in parameters if p.get("parameter_id") and p.get("result_value")
+                {"parameter_id": p.get("parameter_id"), "result_value": p.get("result_value"), "cutoff_value" : p.get("cutoff_value")}
+                for p in parameters if p.get("parameter_id") and p.get("result_value") and p.get("cutoff_value")
             ]
 
         print("Extracted Results:", results)
@@ -276,6 +289,7 @@ def add_or_update_result(patient_test_id):
         for result in results:
             parameter_id = result.get("parameter_id")
             result_value = result.get("result_value")
+            cutoff_value = result.get("cutoff_value")
 
             if not parameter_id or result_value in [None, "", "NULL"]:
                 continue  # skip invalid entries
@@ -290,17 +304,19 @@ def add_or_update_result(patient_test_id):
             if existing:
                 cursor.execute("""
                     UPDATE patient_results
-                    SET result_value = %s
+                    SET result_value = %s ,cutoff_value = %s
                     WHERE id = %s
-                """, (result_value, existing['id']))
+                """, (result_value,cutoff_value, existing['id']))
 
                 activity = f"Updated result for test '{test_name}', parameter_id {parameter_id}"
             else:
+                
                 cursor.execute("""
                     INSERT INTO patient_results
-                    (patient_id, patient_test_id, parameter_id, result_value, created_at, test_profile_id, is_completed)
-                    VALUES (%s, %s, %s, %s, NOW(), %s, 0)
-                """, (patient_id, patient_test_id, parameter_id, result_value, test_profile_id))
+                    (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0)
+                """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id))
+                
 
                 activity = f"Added new result for test '{test_name}', parameter_id {parameter_id}"
 
@@ -377,6 +393,7 @@ def get_test_results(patient_id):
                 p.unit,
                 p.normalvalue,
                 pr.result_value,
+                pr.cutoff_value,
                 pr.test_profile_id,
                 tp.test_name,
                 pr.created_at
@@ -405,6 +422,7 @@ def get_test_results(patient_id):
                 "unit": r["unit"],
                 "normalvalue": r["normalvalue"],
                 "result_value": r["result_value"],
+                "cutoff_value": r["cutoff_value"],
                 "created_at": r["created_at"]
             })
 

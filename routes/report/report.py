@@ -58,7 +58,8 @@ def generate_report(patient_id):
                     p.parameter_name,
                     p.unit,
                     p.normalvalue,
-                    pr.result_value AS result_value
+                    pr.result_value AS result_value,
+                    pr.cutoff_value
                 FROM parameters p
                 LEFT JOIN patient_results pr
                     ON pr.parameter_id = p.id
