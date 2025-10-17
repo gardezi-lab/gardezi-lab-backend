@@ -126,7 +126,7 @@ def create_test_profile():
         if data.get("test_formate") is None:
             return jsonify({"error": "Field 'test_formate' is required"}), 400
 
-        serology_elisa = to_bool(data.get("serology_elisa"))
+        serology_elisa = data.get("serology_elisa")
         unit_ref_range = to_bool(data.get("unit_ref_range"))
         test_formate = to_bool(data.get("test_formate"))
 
