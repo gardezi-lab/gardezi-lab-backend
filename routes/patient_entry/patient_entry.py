@@ -210,7 +210,7 @@ def get_test_parameters(test_id, patient_id):
             WHERE patient_id = %s AND test_profile_id = %s
         """, (patient_id, test_id))
         results = cursor.fetchall()
-        
+        # Murtaza
         # Convert results into a quick lookup dictionary
         results_dict = {
         r['parameter_id']: {
