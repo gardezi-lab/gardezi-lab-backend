@@ -255,44 +255,22 @@ def add_or_update_result(patient_test_id):
         
 
         patient_id = data.get("patient_id")
-        results = data.get("results", [])
-        cutoff_value = data.get("cutoff_value", [])
         parameters = data.get("parameters", [])
         test_profile_id = data.get("test_profile_id")
+        print("parameter ka jo obj he", parameters)
         
-
-        # If results list is empty, extract from parameters
-        if not results and parameters:
-            results = [
-                {"parameter_id": p.get("parameter_id"), "result_value": p.get("result_value"), "cutoff_value" : p.get("cutoff_value")}
-                for p in parameters if p.get("parameter_id") and p.get("result_value") and p.get("cutoff_value")
-            ]
-
-        print("Extracted Results:", results)
 
         # --- Validation ---
         if not patient_id:
             return jsonify({"error": "patient_id is required"}), 400
 
-        if not results or not isinstance(results, list):
-            return jsonify({"error": "results list is invalid or empty"}), 400
-
-        # --- Step 1: Verify that test_profile_id exists ---
-        cursor.execute("SELECT id, test_name FROM test_profiles WHERE id = %s", (test_profile_id,))
-        test_profile = cursor.fetchone()
-        if not test_profile:
-            return jsonify({"error": "Test profile not found"}), 404
-
-        test_name = test_profile["test_name"]
-
+        
         # --- Step 2: Insert/Update results ---
-        for result in results:
+        for result in parameters:
             parameter_id = result.get("parameter_id")
-            result_value = result.get("result_value")
-            cutoff_value = result.get("cutoff_value")
+            result_value = result.get("result_value", None)
+            cutoff_value = result.get("cutoff_value", None)
 
-            if not parameter_id or result_value in [None, "", "NULL"]:
-                continue  # skip invalid entries
 
             # Check if record already exists
             cursor.execute("""
@@ -308,7 +286,7 @@ def add_or_update_result(patient_test_id):
                     WHERE id = %s
                 """, (result_value,cutoff_value, existing['id']))
 
-                activity = f"Updated result for test '{test_name}', parameter_id {parameter_id}"
+              
             else:
                 
                 cursor.execute("""
@@ -318,13 +296,11 @@ def add_or_update_result(patient_test_id):
                 """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id))
                 
 
-                activity = f"Added new result for test '{test_name}', parameter_id {parameter_id}"
-
             # --- Step 3: Insert into patient_activity_log ---
             cursor.execute("""
                 INSERT INTO patient_activity_log (patient_id, activity, created_at)
                 VALUES (%s, %s, NOW())
-            """, (patient_id, activity))
+            """, (patient_id, "activity: result added mamu"))
 
         # --- Step 4: Commit changes ---
         mysql.connection.commit()
@@ -333,8 +309,8 @@ def add_or_update_result(patient_test_id):
         return jsonify({
             "message": "Results saved successfully",
             "test_profile_id": test_profile_id,
-            "test_name": test_name,
-            "results": results
+            "test_name": "bosht",
+            "results": "acha"
         }), 200
 
     except Exception as e:
