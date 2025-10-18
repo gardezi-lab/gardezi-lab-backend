@@ -36,6 +36,7 @@ def generate_report(patient_id):
                 tp.id AS test_id, 
                 tp.test_name,
                 tp.fee,
+                tp.serology_elisa,
                 tp.delivery_time
             FROM patient_tests pt
             JOIN test_profiles tp ON pt.test_id = tp.id
@@ -45,12 +46,15 @@ def generate_report(patient_id):
 
         total_fee = 0
         test_list = []
-
+        
         # Step 3: Loop through each test and fetch parameters + results
         for test in tests:
             test_id = test['test_id']
             patient_test_id = test['patient_test_id']
             fee = int(test.get('fee') or 0)
+    
+       
+            
             total_fee += fee
 
             cursor.execute("""
@@ -73,8 +77,10 @@ def generate_report(patient_id):
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
+                'test_type' : test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),  
                 "parameters": parameters
+                
             })
 
         # Step 4: Generate QR Code
