@@ -166,7 +166,6 @@ def get_patient_tests(patient_id):
         SELECT 
             pt.id AS patient_test_id,
             tp.id AS test_profile_id,
-            tp.serology_elisa,
             tp.test_name
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
@@ -190,8 +189,8 @@ def get_patient_tests(patient_id):
         return jsonify({"error": str(e)}), 500
 
 #------------------ GET patient selected tests parameter by patient_test_id ---
-@patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>', methods=['GET'])
-def get_test_parameters(test_id, patient_id): 
+@patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>/<string:test_type>', methods=['GET'])
+def get_test_parameters(test_id, patient_id, test_type): 
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -239,6 +238,7 @@ def get_test_parameters(test_id, patient_id):
         return jsonify({
             "test_id": test_id,
             "patient_id": patient_id,
+            "test_type" : test_type,
             "parameters": updated_parameters
         }), 200
 
