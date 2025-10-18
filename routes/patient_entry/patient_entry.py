@@ -166,6 +166,7 @@ def get_patient_tests(patient_id):
         SELECT 
             pt.id AS patient_test_id,
             tp.id AS test_profile_id,
+            tp.serology_elisa,
             tp.test_name
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
