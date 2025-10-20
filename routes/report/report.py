@@ -10,17 +10,29 @@ report_bp = Blueprint('report', __name__, url_prefix='/api/report')
 mysql = MySQL()
 
 # ------------------ Invoice API -------------------
-@report_bp.route('/<int:patient_id>', methods=['GET'])
-def generate_report(patient_id):
+@report_bp.route('/<int:id>', methods=['GET'])
+def generate_report(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Step 1: Get patient info
+        # Step 1: Get patient info using counter_id
+        cursor.execute("SELECT pt_id, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({"status": 404, "message": "Counter not found"}), 404
+
+        patient_id = result['pt_id']
+        remarks = result['remarks']
+        sample = result['sample']
+        total_fee = result['total_fee']
+        paid = result['paid']
+        discount = result['discount']
+        
         cursor.execute("""
             SELECT 
-                id, patient_name, cell, gender, age, remarks,
-                users_id, MR_number, sample,
-                discount, paid, total_fee
+                id, patient_name, cell, gender, age, 
+                users_id, MR_number
             FROM patient_entry
             WHERE id = %s
         """, (patient_id,))
@@ -28,7 +40,7 @@ def generate_report(patient_id):
 
         if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
-
+        
         # Step 2: Get patient tests (including delivery_time from test_profiles)
         cursor.execute("""
             SELECT 
@@ -39,7 +51,7 @@ def generate_report(patient_id):
                 tp.serology_elisa,
                 tp.delivery_time
             FROM patient_tests pt
-            JOIN test_profiles tp ON pt.test_id = tp.id
+            JOIN test_profiles tp ON pt.test_id = tp.id 
             WHERE pt.patient_id = %s
         """, (patient_id,))
         tests = cursor.fetchall()
@@ -52,9 +64,6 @@ def generate_report(patient_id):
             test_id = test['test_id']
             patient_test_id = test['patient_test_id']
             fee = int(test.get('fee') or 0)
-    
-       
-            
             total_fee += fee
 
             cursor.execute("""
@@ -77,10 +86,9 @@ def generate_report(patient_id):
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
-                'test_type' : test.get('serology_elisa'),
-                "delivery_time": test.get('reporting_time'),  
+                'test_type': test.get('serology_elisa'),
+                "delivery_time": test.get('reporting_time'),
                 "parameters": parameters
-                
             })
 
         # Step 4: Generate QR Code
@@ -108,14 +116,14 @@ def generate_report(patient_id):
                 "gender": patient['gender'],
                 "age": patient['age'],
                 "MR_number": patient['MR_number'],
-                "sample": patient["sample"],
-                "remarks": patient['remarks'],
+                "sample": sample,
+                "remarks": remarks,
                 "invoice_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             },
             "tests": test_list,
             "total_fee": total_fee,
-            "discount": patient['discount'],
-            "paid": patient['paid'],
+            "discount": discount,
+            "paid": paid,
             "unpaid": unpaid,
             "qr_code": qr_data_url
         }
