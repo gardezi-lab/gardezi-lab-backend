@@ -33,9 +33,9 @@ def create_patient_entry():
         sample = data.get('sample')
         priority = data.get('priority')
         remarks = data.get('remarks')
-        discount = int(data.get('discount', 0))
-        total_fee = int(data.get('total_fee', 0))
-        paid = int(data.get('paid', 0))
+        discount = data.get('discount', 0)
+        total_fee = data.get('total_fee', 0)
+        paid = data.get('paid', 0)
         test_list = data.get('test', [])
         print("Payload received:", data)
 
@@ -63,22 +63,25 @@ def create_patient_entry():
         insert_query = """
         INSERT INTO patient_entry 
     (cell, patient_name, father_hasband_MR, age, gender,
-     email, address, sample, priority, remarks,
-     discount, paid, total_fee, users_id, company_id, package_id)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     email, address, users_id, company_id, package_id)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
         cursor.execute(insert_query, (
     cell, patient_name, father_hasband_MR, age,
-    gender, email, address, sample, priority, remarks,
-    discount, paid, total_fee,
+    gender, email, address,
     users_id,  
     company_id,      
     package_id       
 ))
-
-
         # --- Step 2: Get Patient ID ---
+        print("cursor", cursor)
         patient_id = cursor.lastrowid
+        print("patinet", patient_id)
+        
+        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount,date_created)VALUES(%s, %s, %s, %s, %s, %s ,%s, NOW())"""
+        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount))
+        
+        
 
         # --- Step 3: Generate MR Number ---
         prefix = "2025-GL-"
@@ -166,7 +169,8 @@ def get_patient_tests(patient_id):
         SELECT 
             pt.id AS patient_test_id,
             tp.id AS test_profile_id,
-            tp.test_name
+            tp.test_name,
+            tp.serology_elisa
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
         WHERE pt.patient_id = %s
@@ -419,15 +423,26 @@ def get_all_patient_entries():
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
+        
 
-        base_query = "SELECT * FROM patient_entry ORDER BY id DESC"  
-        cursor.execute(base_query)
-        patients = cursor.fetchall()
+        cursor.execute("""
+        SELECT 
+            c.pt_id AS id,
+            c.*,
+            pt.*
+        FROM counter c
+        JOIN patient_entry pt ON c.pt_id = pt.id
+        ORDER BY c.id DESC
+    """)
 
-        # 🔹 Fetch each patient's tests
-        test_cursor = mysql.connection.cursor(DictCursor)
-        for patient in patients:
-            test_cursor.execute("""
+        patient_data_list = cursor.fetchall()
+        
+
+       
+
+        # Fetch tests for each patient
+        for patient in patient_data_list:
+            cursor.execute("""
                 SELECT 
                     pt.id AS patient_test_id, 
                     tp.test_name,
@@ -438,11 +453,12 @@ def get_all_patient_entries():
                 JOIN test_profiles tp ON pt.test_id = tp.id
                 WHERE pt.patient_id = %s
             """, (patient["id"],))
-            tests = test_cursor.fetchall()
-            patient["tests"] = tests  
+            tests = cursor.fetchall()
+            patient["tests"] = tests
 
         return jsonify({
-            "data": patients
+          
+            "patients": patient_data_list
         }), 200
 
     except Exception as e:
