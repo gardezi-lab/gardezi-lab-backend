@@ -182,7 +182,7 @@ def get_patient_tests(id):
             tp.serology_elisa
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
-        WHERE pt.patient_id = %s
+        WHERE pt.id = %s
         """
         cursor.execute(query, (patient_id,))
         tests = cursor.fetchall()
@@ -571,7 +571,7 @@ def delete_patient_entry(id):
         patient_id = result[0]
         
         cursor.execute("DELETE FROM counter WHERE id = %s", (id,))
-        cursor.execute("DELETE FROM patient_entry WHERE id = %s", (patient_id,))
+        #cursor.execute("DELETE FROM patient_entry WHERE id = %s", (patient_id,))
         mysql.connection.commit()
         cursor.close()
 

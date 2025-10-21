@@ -54,8 +54,8 @@ def generate_invoice(id):
                 tp.delivery_time
             FROM patient_tests pt
             JOIN test_profiles tp ON pt.test_id = tp.id
-            WHERE pt.patient_id = %s
-        """, (patient_id,))
+            WHERE pt.patient_id = %s AND pt.counter_id = %s
+        """, (patient_id, id))
         tests = cursor.fetchall()
 
         total_fee = 0
