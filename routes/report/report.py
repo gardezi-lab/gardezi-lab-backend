@@ -52,8 +52,8 @@ def generate_report(id):
                 tp.delivery_time
             FROM patient_tests pt
             JOIN test_profiles tp ON pt.test_id = tp.id 
-            WHERE pt.patient_id = %s
-        """, (patient_id,))
+            WHERE pt.patient_id = %s AND  pt.counter_id = %s
+        """, (patient_id, id,))
         tests = cursor.fetchall()
 
         total_fee = 0
@@ -78,6 +78,7 @@ def generate_report(id):
                     ON pr.parameter_id = p.id
                     AND pr.patient_test_id = %s
                     AND pr.test_profile_id = p.test_profile_id
+                    AND pr.counter_id = id
                 WHERE p.test_profile_id = %s
             """, (patient_test_id, test_id))
 
