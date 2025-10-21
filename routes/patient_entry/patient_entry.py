@@ -171,7 +171,7 @@ def get_patient_tests(id):
         if not result:
             return jsonify({"message": "Counter not found"}), 404
 
-        patient_id = result['pt_id']
+        patient_id = result['pt_i d']
 
         
         query = """
@@ -184,7 +184,7 @@ def get_patient_tests(id):
         JOIN test_profiles tp ON pt.test_id = tp.id
         WHERE pt.patient_id = %s AND pt.counter_id = %s
         """
-        cursor.execute(query, (patient_id,id,))
+        cursor.execute(query, (patient_id, id,))
         tests = cursor.fetchall()
 
         cursor.close()
@@ -276,7 +276,7 @@ def add_or_update_result(id):
         cursor.execute("""
             SELECT c.pt_id AS patient_id, pt.id AS patient_test_id
             FROM counter c
-            JOIN patient_tests pt ON pt.patient_id = c.pt_id
+            JOIN patient_tests pt ON pt.patient_id = c.pt_id AND pt.counter_id = c.id
             WHERE c.id = %s
         """, (id,))
         result = cursor.fetchone()
