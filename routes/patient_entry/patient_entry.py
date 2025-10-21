@@ -527,7 +527,7 @@ def update_patient_entry(id):
         ))
 
         
-        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s", (patient_id,))
+        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s AND  patient_id = %s", (patient_id,id,))
 
         print(tests)
         for test in tests:
