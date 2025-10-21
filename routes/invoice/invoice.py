@@ -15,7 +15,7 @@ def generate_invoice(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Step 1: Get patient_id using counter_id
+     
         cursor.execute("SELECT pt_id, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
         result = cursor.fetchone()
 
@@ -30,7 +30,7 @@ def generate_invoice(id):
         discount = result['discount']
         
 
-        # Step 2: Get patient info
+       
         cursor.execute("""
             SELECT 
                 id, patient_name, cell, gender, age, 
