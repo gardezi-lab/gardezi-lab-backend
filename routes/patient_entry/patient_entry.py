@@ -460,7 +460,7 @@ def patient_get_by_id(id):
 
         cursor.close()
         
-        return jsonify(patient), 200
+        return jsonify([patient]), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
