@@ -173,13 +173,13 @@ def cell_patient_check(cell):
 
     query = "SELECT * FROM patient_entry WHERE cell = %s"
     cursor.execute(query, (cell,))
-    data = cursor.fetchone()
+    data = cursor.fetchall()
     cursor.close()
 
     if data:
-        return jsonify({"data": data}), 200
+        return jsonify({"data": data,"status": 200}), 200
     else:
-        return jsonify({"message": "No patient found for this cell"}), 404
+        return jsonify({"message": "No patient found for this cell", "status":404}), 404
 
         
     
