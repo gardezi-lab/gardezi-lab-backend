@@ -171,7 +171,7 @@ def get_patient_tests(id):
         if not result:
             return jsonify({"message": "Counter not found"}), 404
 
-        patient_id = result['pt_i d']
+        patient_id = result['pt_id']
 
         
         query = """
