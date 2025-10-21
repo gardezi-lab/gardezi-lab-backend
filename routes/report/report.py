@@ -9,13 +9,13 @@ import MySQLdb.cursors
 report_bp = Blueprint('report', __name__, url_prefix='/api/report')
 mysql = MySQL()
 
-# ------------------ Invoice API -------------------
+# ------------------ Report API -------------------
 @report_bp.route('/<int:id>', methods=['GET'])
 def generate_report(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Step 1: Get patient info using counter_id
+        
         cursor.execute("SELECT pt_id, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
         result = cursor.fetchone()
 
@@ -41,7 +41,7 @@ def generate_report(id):
         if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
         
-        # Step 2: Get patient tests (including delivery_time from test_profiles)
+        
         cursor.execute("""
             SELECT 
                 pt.id AS patient_test_id, 
@@ -59,7 +59,7 @@ def generate_report(id):
         total_fee = 0
         test_list = []
         
-        # Step 3: Loop through each test and fetch parameters + results
+  
         for test in tests:
             test_id = test['test_id']
             patient_test_id = test['patient_test_id']
@@ -71,7 +71,7 @@ def generate_report(id):
                     p.parameter_name,
                     p.unit,
                     p.normalvalue,
-                    pr.result_value AS result_value,
+                    COALESCE(pr.result_value, p.default_value) AS result_value,
                     pr.cutoff_value
                 FROM parameters p
                 LEFT JOIN patient_results pr
@@ -99,12 +99,12 @@ def generate_report(id):
         qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
         qr_data_url = f"data:image/png;base64,{qr_base64}"
 
-        # Step 5: Calculate unpaid
+        #  Calculate unpaid
         unpaid = patient.get("unpaid")
         if unpaid is None:
             unpaid = (total_fee - patient.get("discount", 0) - patient.get("paid", 0))
 
-        # Step 6: Final JSON response
+        
         invoice_data = {
             "status": 200,
             "message": "Invoice generated successfully",
