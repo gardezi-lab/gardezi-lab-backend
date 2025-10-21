@@ -78,9 +78,9 @@ def generate_report(id):
                     ON pr.parameter_id = p.id
                     AND pr.patient_test_id = %s
                     AND pr.test_profile_id = p.test_profile_id
-                    AND pr.counter_id = id
+                    AND pr.counter_id = %s
                 WHERE p.test_profile_id = %s
-            """, (patient_test_id, test_id))
+            """, (patient_test_id, id, test_id))
 
             parameters = cursor.fetchall()
 
