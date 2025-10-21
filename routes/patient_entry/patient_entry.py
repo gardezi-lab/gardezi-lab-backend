@@ -21,6 +21,7 @@ def create_patient_entry():
 
         # --- Extract Fields ---
         cell = data.get('cell')
+        patient_id_posted = data.get('patient_id_posted')
         patient_name = data.get('patient_name')
         father_hasband_MR = data.get('father_hasband_MR')
         age = data.get('age')
@@ -58,25 +59,26 @@ def create_patient_entry():
         age = str(age)
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
+        #patient_id_posted
 
-        
-        insert_query = """
+        if patient_id_posted == 0:
+            insert_query = """
         INSERT INTO patient_entry 
-    (cell, patient_name, father_hasband_MR, age, gender,
-     email, address, users_id, company_id, package_id)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-"""
-        cursor.execute(insert_query, (
-    cell, patient_name, father_hasband_MR, age,
-    gender, email, address,
-    users_id,  
-    company_id,      
-    package_id       
-))
+        (cell, patient_name, father_hasband_MR, age, gender,
+         email, address, users_id, company_id, package_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+            cursor.execute(insert_query, (
+        cell, patient_name, father_hasband_MR, age,
+        gender, email, address,
+        users_id, company_id, package_id
+    ))
+            patient_id = cursor.lastrowid
+            print("Inserted patient_id:", patient_id)
+        else:
+            patient_id = patient_id_posted
+            print("Existing patient_id:", patient_id)
 
-        print("cursor", cursor)
-        patient_id = cursor.lastrowid
-        print("patinet", patient_id)
         
         insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount,date_created)VALUES(%s, %s, %s, %s, %s, %s ,%s, NOW())"""
         cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount))
@@ -154,7 +156,36 @@ def create_patient_entry():
             except Exception:
                 pass
         return jsonify({"error": str(e)}), 500
+    
+    
+#------------------TODO patient cell check if exist-----------------
 
+@patient_entry_bp.route('/cell/<string:cell>', methods=['GET'])
+def cell_patient_check(cell):
+    #d#ata = request.get_json()
+    # cell = data.get("cell")  
+    
+    if not cell:    
+        return jsonify({"error": "cell is required"}), 400
+
+    mysql = current_app.mysql
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    query = "SELECT * FROM patient_entry WHERE cell = %s"
+    cursor.execute(query, (cell,))
+    data = cursor.fetchone()
+    cursor.close()
+
+    if data:
+        return jsonify({"data": data}), 200
+    else:
+        return jsonify({"message": "No patient found for this cell"}), 404
+
+        
+    
+            
+            
+            
 
 #-------------------- TODO GET selected test of patient by patient_id -----------------------
 
