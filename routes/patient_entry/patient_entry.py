@@ -204,8 +204,8 @@ def get_patient_tests(id):
 
 #------------------ TODO GET patient selected tests parameter by patient_test_id ---
 
-@patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>/<string:test_type>', methods=['GET'])
-def get_test_parameters(test_id, patient_id, test_type): 
+@patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>/<int:counter_id>/<string:test_type>', methods=['GET'])
+def get_test_parameters(test_id, patient_id, counter_id, test_type): 
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -222,8 +222,8 @@ def get_test_parameters(test_id, patient_id, test_type):
         cursor.execute("""
             SELECT parameter_id, result_value,cutoff_value
             FROM patient_results
-            WHERE patient_id = %s AND test_profile_id = %s
-        """, (patient_id, test_id))
+            WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s
+        """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
         
         results_dict = {
@@ -300,8 +300,8 @@ def add_or_update_result(id):
         
             cursor.execute("""
                 SELECT id FROM patient_results
-                WHERE patient_test_id = %s AND parameter_id = %s AND patient_id = %s
-            """, (patient_test_id, parameter_id, patient_id))
+                WHERE patient_test_id = %s AND parameter_id = %s AND patient_id = %s AND counter_id = %s
+            """, (patient_test_id, parameter_id, patient_id, id))
             existing = cursor.fetchone()
 
             if existing:
@@ -313,9 +313,9 @@ def add_or_update_result(id):
             else:
                 cursor.execute("""
                     INSERT INTO patient_results
-                    (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0)
-                """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id))
+                    (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed, counter_id)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s)
+                """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id, id))
 
             # ---  Insert into patient_activity_log ---
             cursor.execute("""
