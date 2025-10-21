@@ -182,9 +182,9 @@ def get_patient_tests(id):
             tp.serology_elisa
         FROM patient_tests pt
         JOIN test_profiles tp ON pt.test_id = tp.id
-        WHERE pt.id = %s
+        WHERE pt.patient_id = %s AND pt.counter_id = %s
         """
-        cursor.execute(query, (patient_id,))
+        cursor.execute(query, (patient_id,id,))
         tests = cursor.fetchall()
 
         cursor.close()
