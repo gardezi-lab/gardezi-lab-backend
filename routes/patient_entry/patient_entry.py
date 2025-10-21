@@ -445,6 +445,7 @@ def patient_get_by_id(id):
         cursor.execute("""
             SELECT 
                 pt.id AS patient_test_id,
+                pt.test_id AS test_id,
                 tp.test_name,
                 tp.sample_required,
                 tp.delivery_time,
