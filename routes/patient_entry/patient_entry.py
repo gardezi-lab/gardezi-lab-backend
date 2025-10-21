@@ -345,7 +345,7 @@ def update_fee(id):
         new_paid = int(data.get("paid"))
 
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT paid, total_fee FROM patient_entry WHERE id=%s", (id,))
+        cursor.execute("SELECT paid, total_fee FROM counter WHERE id=%s", (id,))
         result = cursor.fetchone()
         if not result:
             return jsonify({"message": "Record not found"}), 404
@@ -356,7 +356,7 @@ def update_fee(id):
         
         paid = total_paid
         
-        cursor.execute("UPDATE patient_entry SET paid = %s WHERE id=%s", (total_paid, id))
+        cursor.execute("UPDATE counter SET paid = %s WHERE id=%s", (total_paid, id))
         mysql.connection.commit()
         cursor.close()
 
