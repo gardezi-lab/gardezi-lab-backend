@@ -10,7 +10,7 @@ report_bp = Blueprint('report', __name__, url_prefix='/api/report')
 mysql = MySQL()
 
 # ------------------ Report API -------------------
-@report_bp.route('/<int:id>', methods=['GET'])
+@report_bp.route('/<int:id>', methods=['POST'])
 def generate_report(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -40,20 +40,27 @@ def generate_report(id):
 
         if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
-        
-        
-        cursor.execute("""
-            SELECT 
-                pt.id AS patient_test_id, 
-                tp.id AS test_id, 
-                tp.test_name,
-                tp.fee,
-                tp.serology_elisa,
-                tp.delivery_time
-            FROM patient_tests pt
-            JOIN test_profiles tp ON pt.test_id = tp.id 
-            WHERE pt.patient_id = %s AND  pt.counter_id = %s
-        """, (patient_id, id,))
+        data = request.get_json()
+        tests = data.get("test", [])
+        test_ids = [t["id"] for t in tests]
+        placeholders = ', '.join(['%s'] * len(test_ids))
+        query = f"""
+        SELECT 
+            pt.id AS patient_test_id, 
+            tp.id AS test_id, 
+            tp.test_name,
+            tp.fee,
+            tp.serology_elisa,
+            tp.delivery_time
+        FROM patient_tests pt
+        JOIN test_profiles tp ON pt.test_id = tp.id 
+        WHERE pt.patient_id = %s 
+        AND pt.counter_id = %s 
+        AND pt.test_id IN ({placeholders})
+    """
+
+        params = [patient_id, id] + test_ids
+        cursor.execute(query, params)
         tests = cursor.fetchall()
 
         total_fee = 0
