@@ -85,7 +85,7 @@ def generate_report(id):
             JOIN patient_results pr 
                 ON pr.parameter_id = p.id
             JOIN patient_tests pt 
-                ON pr.test_profile_id = pt.test_id
+                ON pr.test_profile_id = pt.test_id AND pr.counter_id = pt.counter_id
             JOIN counter c 
                 ON pt.counter_id = c.id
             WHERE pt.patient_id = %s
