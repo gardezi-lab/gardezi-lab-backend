@@ -173,7 +173,7 @@ def cell_patient_check(cell):
 
     query = "SELECT * FROM patient_entry WHERE cell = %s"
     cursor.execute(query, (cell,))
-    data = cursor.fetchone()
+    data = cursor.fetchall()
     cursor.close()
 
     if data:
