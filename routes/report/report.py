@@ -74,28 +74,68 @@ def generate_report(id):
             total_fee += fee
 
             cursor.execute("""
-                SELECT 
-                    p.parameter_name,
-                    p.unit,
-                    p.normalvalue,
-                    COALESCE(pr.result_value, p.default_value) AS result_value,
-                    pr.cutoff_value
-                FROM parameters p
-                LEFT JOIN patient_results pr
-                    ON pr.parameter_id = p.id
-                    AND pr.patient_test_id = %s
-                    AND pr.test_profile_id = p.test_profile_id
-                    AND pr.counter_id = %s
-                WHERE p.test_profile_id = %s
-            """, (patient_test_id, id, test_id))
+            SELECT 
+                DATE(c.date_created) AS test_date,
+                p.parameter_name,
+                p.unit,
+                p.normalvalue,
+                pr.result_value,
+                pr.cutoff_value
+            FROM parameters p
+            JOIN patient_results pr 
+                ON pr.parameter_id = p.id
+            JOIN patient_tests pt 
+                ON pr.test_profile_id = pt.test_id
+            JOIN counter c 
+                ON pt.counter_id = c.id
+            WHERE pt.patient_id = %s
+            AND pt.test_id = %s
+            ORDER BY c.date_created ASC
+        """, (patient_id, test_id))
 
-            parameters = cursor.fetchall()
+        history_rows = cursor.fetchall()
+
+        # 🧩 Organize history data by parameter
+        parameters_dict = {}
+        date_set = []
+
+        for row in history_rows:
+            date_str = str(row['test_date'])
+            if date_str not in date_set:
+                date_set.append(date_str)
+
+            pname = row['parameter_name']
+            if pname not in parameters_dict:
+                parameters_dict[pname] = {
+                    "parameter_name": pname,
+                    "unit": row['unit'],
+                    "normalvalue": row['normalvalue'],
+                    "cutoff_value": row['cutoff_value'],
+                    "results_by_date": {}
+                }
+            parameters_dict[pname]["results_by_date"][date_str] = row['result_value']
+            #parameters_dict[pname]["cutoff_value"] = row['cutoff_value']
+
+        # 🔄 Align results with all dates (to fill empty values if missing)
+        parameters = []
+        for pname, pdata in parameters_dict.items():
+            results = []
+            for d in date_set:
+                results.append(pdata["results_by_date"].get(d, "-"))  # "-" for missing
+            parameters.append({
+                "parameter_name": pdata["parameter_name"],
+                "cutoff_value": pdata["cutoff_value"],
+                "unit": pdata["unit"],
+                "normalvalue": pdata["normalvalue"],
+                "result_value": results
+            })
 
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
                 'test_type': test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),
+                "dates": date_set,
                 "parameters": parameters
             })
 
