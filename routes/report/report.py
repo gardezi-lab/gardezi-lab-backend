@@ -75,17 +75,18 @@ def generate_report(id):
 
             cursor.execute("""
             SELECT 
-                DATE(c.date_created) AS test_date,
+                c.date_created AS test_datetime,
                 p.parameter_name,
                 p.unit,
                 p.normalvalue,
                 pr.result_value,
-                pr.cutoff_value
+                pr.cutoff_value,
+                pr.patient_test_id
             FROM parameters p
             JOIN patient_results pr 
                 ON pr.parameter_id = p.id
             JOIN patient_tests pt 
-                ON pr.test_profile_id = pt.test_id AND pr.counter_id = pt.counter_id
+                ON pr.patient_test_id = pt.id
             JOIN counter c 
                 ON pt.counter_id = c.id
             WHERE pt.patient_id = %s
@@ -93,51 +94,63 @@ def generate_report(id):
             ORDER BY c.date_created ASC
         """, (patient_id, test_id))
 
-        history_rows = cursor.fetchall()
+            history_rows = cursor.fetchall()
 
-        # 🧩 Organize history data by parameter
-        parameters_dict = {}
-        date_set = []
+        # Organize history data by parameter
+            parameters_dict = {}
+            date_set = []
+            seen_dates = set()
 
-        for row in history_rows:
-            date_str = str(row['test_date'])
-            if date_str not in date_set:
-                date_set.append(date_str)
+            for row in history_rows:
+                # use full datetime string (or format as you prefer) to keep distinct runs
+                date_str = str(row['test_datetime'])
 
-            pname = row['parameter_name']
-            if pname not in parameters_dict:
-                parameters_dict[pname] = {
-                    "parameter_name": pname,
-                    "unit": row['unit'],
-                    "normalvalue": row['normalvalue'],
-                    "cutoff_value": row['cutoff_value'],
-                    "results_by_date": {}
-                }
-            parameters_dict[pname]["results_by_date"][date_str] = row['result_value']
-            #parameters_dict[pname]["cutoff_value"] = row['cutoff_value']
+                if date_str not in seen_dates:
+                    seen_dates.add(date_str)
+                    date_set.append(date_str)
 
-        # 🔄 Align results with all dates (to fill empty values if missing)
+                pname = row['parameter_name']
+                if pname not in parameters_dict:
+                    parameters_dict[pname] = {
+                        "parameter_name": pname,
+                        "unit": row['unit'],
+                        "normalvalue": row['normalvalue'],
+                        # store per-date values and cutoff per date if needed
+                        "results_by_date": {},
+                        "cutoff_by_date": {}
+                    }
+
+                # store value and cutoff by exact datetime (prevents overwrite collisions)
+                parameters_dict[pname]["results_by_date"][date_str] = row['result_value']
+                parameters_dict[pname]["cutoff_by_date"][date_str] = row.get('cutoff_value')
+
+            # Align results with all dates (to fill empty values if missing)
         parameters = []
         for pname, pdata in parameters_dict.items():
             results = []
+            cutoffs = []
             for d in date_set:
                 results.append(pdata["results_by_date"].get(d, "-"))  # "-" for missing
+                cutoffs.append(pdata["cutoff_by_date"].get(d))
             parameters.append({
                 "parameter_name": pdata["parameter_name"],
-                "cutoff_value": pdata["cutoff_value"],
                 "unit": pdata["unit"],
                 "normalvalue": pdata["normalvalue"],
+                # you can return either single cutoff or per-date cutoffs:
+                "cutoff_value": cutoffs,
                 "result_value": results
             })
 
-            test_list.append({
-                "test_name": test['test_name'],
-                "fee": fee,
-                'test_type': test.get('serology_elisa'),
-                "delivery_time": test.get('reporting_time'),
-                "dates": date_set,
-                "parameters": parameters
-            })
+        # append the test once (outside parameter loop)
+        test_list.append({
+            "test_name": test['test_name'],
+            "fee": fee,
+            "test_type": test.get('serology_elisa'),
+            "delivery_time": test.get('reporting_time'),
+            "dates": date_set,
+            "parameters": parameters
+        })
+
 
         # Step 4: Generate QR Code
         qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
