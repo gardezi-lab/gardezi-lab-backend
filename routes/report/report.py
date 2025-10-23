@@ -78,30 +78,23 @@ def generate_report(id):
     SELECT 
         c.date_created AS test_datetime,
         p.parameter_name,
+        pt.counter_id AS rowcounterid,
         p.unit,
         p.normalvalue,
         pr.result_value,
         pr.cutoff_value,
-        pr.patient_test_id
+        pr.test_profile_id
     FROM parameters p
-    JOIN patient_results pr 
-        ON pr.parameter_id = p.id
-    JOIN patient_tests pt 
-        ON pr.test_profile_id = pt.test_id
-        AND pt.patient_id = %s
-       
-    JOIN counter c 
-        ON pt.counter_id = c.id
-    WHERE pt.test_id = %s
-      AND p.test_profile_id = pt.test_id
+    JOIN patient_tests pt ON p.test_profile_id = pt.test_id AND pt.patient_id = %s AND pt.counter_id <= %s
+    JOIN patient_results pr ON pr.parameter_id = p.id AND pr.counter_id=pt.counter_id
+    JOIN counter c ON pt.counter_id = c.id
+    WHERE pt.test_id = %s 
     ORDER BY c.date_created ASC
-""", (patient_id, test_id))
-
+""", (patient_id, id, test_id))
+            print("testing test_id inside loop", test_id)
 
 
             history_rows = cursor.fetchall()
-            if history_limit and isinstance(history_limit, int):
-                history_rows = history_rows[:history_limit]
 
             parameters_dict = {}
             date_set = []
@@ -109,6 +102,8 @@ def generate_report(id):
 
             for row in history_rows:
                 date_str = str(row['test_datetime'])
+                print("date string", date_str)
+                print("counter id from row just checking", row['rowcounterid'])
                 if date_str not in seen_dates:
                     seen_dates.add(date_str)
                     date_set.append(date_str)
@@ -122,7 +117,7 @@ def generate_report(id):
                         "results_by_date": {},
                         "cutoff_by_date": {}
                     }
-                        #hello 
+
                 parameters_dict[pname]["results_by_date"][date_str] = row['result_value']
                 parameters_dict[pname]["cutoff_by_date"][date_str] = row.get('cutoff_value')
 
