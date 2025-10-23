@@ -67,6 +67,7 @@ def generate_report(id):
         total_fee = 0
         test_list = []
         
+        
         for test in tests:
             test_id = test['test_id']
             patient_test_id = test['patient_test_id']
@@ -74,33 +75,32 @@ def generate_report(id):
             total_fee += fee
 
             cursor.execute("""
-                SELECT 
-                    c.date_created AS test_datetime,
-                    p.parameter_name,
-                    p.unit,
-                    p.normalvalue,
-                    pr.result_value,
-                    pr.cutoff_value,
-                    pr.patient_test_id
-                FROM parameters p
-                JOIN patient_results pr 
-                    ON pr.parameter_id = p.id
-                JOIN patient_tests pt 
-                    ON pr.patient_test_id = pt.id
-                JOIN counter c 
-                    ON pt.counter_id = c.id
-                WHERE pt.patient_id = %s
-                AND pt.test_id = %s
-                ORDER BY c.date_created ASC
-            """, (patient_id, test_id))
+    SELECT 
+        c.date_created AS test_datetime,
+        p.parameter_name,
+        p.unit,
+        p.normalvalue,
+        pr.result_value,
+        pr.cutoff_value,
+        pr.patient_test_id
+    FROM parameters p
+    JOIN patient_results pr 
+        ON pr.parameter_id = p.id
+    JOIN patient_tests pt 
+        ON pr.test_profile_id = pt.test_id
+        AND pt.patient_id = %s
+        AND pt.counter_id = %s
+    JOIN counter c 
+        ON pt.counter_id = c.id
+    WHERE pt.test_id = %s
+      AND p.test_profile_id = pt.test_id
+    ORDER BY c.date_created ASC
+""", (patient_id, id, test_id))
+
+
 
             history_rows = cursor.fetchall()
 
-            
-            if history_limit and isinstance(history_limit, int):
-                history_rows = history_rows[:history_limit]
-
-           
             parameters_dict = {}
             date_set = []
             seen_dates = set()
