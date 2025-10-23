@@ -89,17 +89,19 @@ def generate_report(id):
     JOIN patient_tests pt 
         ON pr.test_profile_id = pt.test_id
         AND pt.patient_id = %s
-        AND pt.counter_id = %s
+       
     JOIN counter c 
         ON pt.counter_id = c.id
     WHERE pt.test_id = %s
       AND p.test_profile_id = pt.test_id
     ORDER BY c.date_created ASC
-""", (patient_id, id, test_id))
+""", (patient_id, test_id))
 
 
 
             history_rows = cursor.fetchall()
+            if history_limit and isinstance(history_limit, int):
+                history_rows = history_rows[:history_limit]
 
             parameters_dict = {}
             date_set = []
