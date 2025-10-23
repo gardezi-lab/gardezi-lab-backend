@@ -122,7 +122,7 @@ def generate_report(id):
                         "results_by_date": {},
                         "cutoff_by_date": {}
                     }
-
+                        #hello 
                 parameters_dict[pname]["results_by_date"][date_str] = row['result_value']
                 parameters_dict[pname]["cutoff_by_date"][date_str] = row.get('cutoff_value')
 
