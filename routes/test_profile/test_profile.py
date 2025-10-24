@@ -104,11 +104,9 @@ def create_test_profile():
             "fee": fee,
             "department_id": department_id
         }
-
         for field_name, value in required_fields.items():
             if value is None or (isinstance(value, str) and value.strip() == ""):
                 return jsonify({"error": f"Field '{field_name}' is required"}), 400
-
         # --- Boolean fields validation ---
         def to_bool(val):
             if isinstance(val, bool):

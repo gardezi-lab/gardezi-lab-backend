@@ -674,7 +674,7 @@ def verify_test(test_id):
         if code == 0:
             update_query = """
             UPDATE patient_tests
-            SET status = 'unverified', verified_at = NOW(), verified_by = %s
+            SET status = 'verify', verified_at = NOW(), verified_by = %s
             WHERE test_id = %s AND counter_id = %s
             """
             cursor.execute(update_query, (verified_by, test_id, counter_id))
