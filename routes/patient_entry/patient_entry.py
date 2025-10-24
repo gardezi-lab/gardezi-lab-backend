@@ -259,7 +259,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         results = cursor.fetchall()
         
         cursor.execute("""
-            SELECT comment
+            SELECT comment,status
             FROM patient_tests
             WHERE test_id = %s AND counter_id = %s
         """, (test_id,counter_id))
@@ -267,6 +267,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         result = cursor.fetchone()
         if result:
             comment = result['comment']
+            status = result['status']
         
         results_dict = {
         r['parameter_id']: {
@@ -295,6 +296,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             "test_id": test_id,
             "patient_id": patient_id,
             "comment"  : comment,
+            "status"  : status,
             "test_type" : test_type,
             "parameters": updated_parameters
         }), 200
