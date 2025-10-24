@@ -301,11 +301,12 @@ def add_or_update_result(id):
         data = request.get_json()
         parameters = data.get("parameters", [])
         test_profile_id = data.get("test_profile_id")
+        comment = data.get("comment")
         
 
         
         cursor.execute("""
-            SELECT c.pt_id AS patient_id, pt.id AS patient_test_id
+            SELECT c.pt_id AS patient_id, pt.id AS patient_test_id 
             FROM counter c
             JOIN patient_tests pt ON pt.patient_id = c.pt_id AND pt.counter_id = c.id
             WHERE c.id = %s
@@ -330,10 +331,11 @@ def add_or_update_result(id):
 
         
             cursor.execute("""
-                SELECT id FROM patient_results
+                SELECT id, test_profile_id FROM patient_results
                 WHERE patient_test_id = %s AND parameter_id = %s AND patient_id = %s AND counter_id = %s
             """, (patient_test_id, parameter_id, patient_id, id))
             existing = cursor.fetchone()
+            
 
             if existing:
                 cursor.execute("""
@@ -347,6 +349,27 @@ def add_or_update_result(id):
                     (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed, counter_id)
                     VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s)
                 """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id, id))
+                
+                
+                # comment add update 
+            if comment:
+                cursor.execute("""
+                        SELECT id FROM patient_tests WHERE test_id = %s AND counter_id = %s
+                    """, (test_profile_id, id))
+                test_exists = cursor.fetchone()
+                print("test_xist", test_exists)
+
+                if test_exists:
+                    cursor.execute("""
+                            UPDATE patient_tests
+                            SET comment = %s
+                            WHERE test_id = %s AND counter_id = %s
+                        """, (comment, test_profile_id, id))
+                else:
+                    cursor.execute("""
+                            INSERT INTO patient_tests (test_id, counter_id, comment)
+                            VALUES (%s, %s, %s)
+                        """, (test_profile_id, id, comment))
 
             # ---  Insert into patient_activity_log ---
             cursor.execute("""
@@ -568,8 +591,8 @@ def update_patient_entry(id):
             print("Inserting test:", test_id)
             cursor.execute("""
                 INSERT INTO patient_tests (patient_id, test_id, reporting_time,counter_id)
-                VALUES (%s, %s, %s, %s)
-            """, (patient_id, test_id, delivery_datetime, id))
+                VALUES (%s, %s, %s, %s, %s)
+            """, (patient_id, test_id, delivery_datetime, id,))
 
         
         mysql.connection.commit()

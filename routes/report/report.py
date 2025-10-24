@@ -62,7 +62,7 @@ def generate_report(id):
 
         params = [patient_id, id] + test_ids
         cursor.execute(query, params)
-        tests = cursor.fetchall()
+        tests = cursor.fetchall() 
 
         total_fee = 0
         test_list = []
@@ -79,6 +79,7 @@ def generate_report(id):
         c.date_created AS test_datetime,
         p.parameter_name,
         pt.counter_id AS rowcounterid,
+        pt.comment,
         p.unit,
         p.normalvalue,
         pr.result_value,
@@ -92,9 +93,11 @@ def generate_report(id):
     ORDER BY c.date_created ASC
 """, (patient_id, id, test_id))
             print("testing test_id inside loop", test_id)
+             
 
 
             history_rows = cursor.fetchall()
+            print("history_rows", history_rows)
 
             parameters_dict = {}
             date_set = []
@@ -102,6 +105,7 @@ def generate_report(id):
 
             for row in history_rows:
                 date_str = str(row['test_datetime'])
+                
                 print("date string", date_str)
                 print("counter id from row just checking", row['rowcounterid'])
                 if date_str not in seen_dates:
@@ -113,6 +117,7 @@ def generate_report(id):
                     parameters_dict[pname] = {
                         "parameter_name": pname,
                         "unit": row['unit'],
+                        'comment' : row['comment'],
                         "normalvalue": row['normalvalue'],
                         "results_by_date": {},
                         "cutoff_by_date": {}
@@ -131,6 +136,7 @@ def generate_report(id):
                 parameters.append({
                     "parameter_name": pdata["parameter_name"],
                     "unit": pdata["unit"],
+                    
                     "normalvalue": pdata["normalvalue"],
                     "cutoff_value": cutoffs,
                     "result_value": results
@@ -139,11 +145,13 @@ def generate_report(id):
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
+                "comment" : pdata['comment'],
                 "test_type": test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),
                 "dates": date_set,
                 "parameters": parameters
             })
+            print("comment", test.get("comment"))
 
         # Generate QR Code
         qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
