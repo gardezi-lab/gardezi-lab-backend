@@ -651,7 +651,7 @@ def delete_patient_entry(id):
 
 #-------------------------#TODO Test Verify ---------------------------------
 
-@patient_entry_bp.route('/verify_test/<int:test_id>', methods=['PATCH'])
+@patient_entry_bp.route('/verify_test/<int:test_id>', methods=['PUT'])
 def verify_test(test_id):
     try:
         mysql = current_app.mysql
