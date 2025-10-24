@@ -63,6 +63,9 @@ def generate_report(id):
         params = [patient_id, id] + test_ids
         cursor.execute(query, params)
         tests = cursor.fetchall() 
+        
+        
+        
 
         total_fee = 0
         test_list = []
@@ -73,6 +76,16 @@ def generate_report(id):
             patient_test_id = test['patient_test_id']
             fee = int(test.get('fee') or 0)
             total_fee += fee
+            #first ham check kr rhe hen k es test me koi interpertation add he. agar add he to uski id
+            cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
+            resulttest = cursor.fetchone()
+            intprid = resulttest['interpretation']
+            cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
+            resulttest = cursor.fetchone()
+            detaildetail = resulttest['detail']
+            print("intp ki id details text", detaildetail)
+            print("intp ki test id", test_id)
+            
 
             cursor.execute("""
     SELECT 
@@ -93,9 +106,7 @@ def generate_report(id):
     ORDER BY c.date_created ASC
 """, (patient_id, id, test_id))
             print("testing test_id inside loop", test_id)
-             
-
-
+            
             history_rows = cursor.fetchall()
             print("history_rows", history_rows)
 
@@ -136,22 +147,27 @@ def generate_report(id):
                 parameters.append({
                     "parameter_name": pdata["parameter_name"],
                     "unit": pdata["unit"],
-                    
                     "normalvalue": pdata["normalvalue"],
                     "cutoff_value": cutoffs,
                     "result_value": results
                 })
+                
+                
+                
+                
+
 
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
                 "comment" : pdata['comment'],
+                'intr_detail': detaildetail,
                 "test_type": test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),
                 "dates": date_set,
                 "parameters": parameters
             })
-            print("comment", test.get("comment"))
+            
 
         # Generate QR Code
         qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
