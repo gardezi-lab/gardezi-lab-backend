@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, Blueprint, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
 from datetime import datetime, timedelta
+from datetime import datetime
 import MySQLdb
 import json
 import random
@@ -257,6 +258,16 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
         
+        cursor.execute("""
+            SELECT comment
+            FROM patient_tests
+            WHERE test_id = %s AND counter_id = %s
+        """, (test_id,counter_id))
+        
+        result = cursor.fetchone()
+        if result:
+            comment = result['comment']
+        
         results_dict = {
         r['parameter_id']: {
             'result_value': r['result_value'],
@@ -283,6 +294,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         return jsonify({
             "test_id": test_id,
             "patient_id": patient_id,
+            "comment"  : comment,
             "test_type" : test_type,
             "parameters": updated_parameters
         }), 200
@@ -637,25 +649,59 @@ def delete_patient_entry(id):
 
 #-------------------------#TODO Test Verify ---------------------------------
 
-@patient_entry_bp.route('/verify_test/<int:patient_test_id>', methods=['PATCH'])
-def verify_test(patient_test_id):
+@patient_entry_bp.route('/verify_test/<int:test_id>', methods=['PATCH'])
+def verify_test(test_id):
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        update_query = """
+        data = request.get_json()
+        code = int(data.get("code", 0))
+        counter_id = data.get("counter_id")
+        verified_by = data.get("verified_by")
+
+        if code == 1:      
+            update_query = """
+                UPDATE patient_tests
+                SET status = 'verified', verified_at = NOW(), verified_by = %s
+                WHERE test_id = %s AND counter_id = %s
+            """
+            cursor.execute(update_query, (verified_by, test_id, counter_id))
+            mysql.connection.commit()
+            
+        if code == 0:
+            update_query = """
             UPDATE patient_tests
-            SET status = 'verified'
-            WHERE id = %s
-        """
-        cursor.execute(update_query, (patient_test_id,))
-        mysql.connection.commit()
-        cursor.close()
+            SET status = 'unverified', verified_at = NOW(), verified_by = %s
+            WHERE test_id = %s AND counter_id = %s
+            """
+            cursor.execute(update_query, (verified_by, test_id, counter_id))
+            mysql.connection.commit()
+            
+            check_query = """
+                SELECT status, patient_id
+                FROM patient_tests
+                WHERE test_id = %s
+            """
+            cursor.execute(check_query, (test_id,))
+            result = cursor.fetchone()
 
+            if result and result["status"] == "verified":
+                pt_id = result["patient_id"]
+                
+                cursor.execute("""
+                    UPDATE counter 
+                    SET status = 'verified'
+                    WHERE patient_id = %s AND id = %s
+                """, (pt_id,counter_id))
+                mysql.connection.commit()
+
+        cursor.close()
         return jsonify({"message": "Test verified successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 #------------------------------- #TODO GET Unverifyed data --------------------
 
 @patient_entry_bp.route('/unverified_tests', methods=['GET'])
