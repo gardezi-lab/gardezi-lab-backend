@@ -83,7 +83,7 @@ def generate_report(id):
             cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
             resulttest = cursor.fetchone()
             detaildetail = resulttest['detail']
-            cursor.execute("SELECT comment FROM patient_tests WHERE test_id = %s AND counter_id= %s", (intprid, id,)) 
+            cursor.execute("SELECT comment FROM patient_tests WHERE test_id = %s AND counter_id= %s", (test_id, id,)) 
             comresult = cursor.fetchone()
             commentcomment = comresult['comment']
             
