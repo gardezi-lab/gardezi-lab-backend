@@ -366,27 +366,16 @@ def add_or_update_result(id):
                 
                 
                 # comment add update 
-            if comment:
-                cursor.execute("""
-                        SELECT id FROM patient_tests WHERE test_id = %s AND counter_id = %s
-                    """, (test_profile_id, id))
-                test_exists = cursor.fetchone()
-                print("test_xist", test_exists)
-
-                if test_exists:
-                    cursor.execute("""
+           
+        cursor.execute("""
                             UPDATE patient_tests
                             SET comment = %s
                             WHERE test_id = %s AND counter_id = %s
                         """, (comment, test_profile_id, id))
-                else:
-                    cursor.execute("""
-                            INSERT INTO patient_tests (test_id, counter_id, comment)
-                            VALUES (%s, %s, %s)
-                        """, (test_profile_id, id, comment))
+               
 
             # ---  Insert into patient_activity_log ---
-            cursor.execute("""
+        cursor.execute("""
                 INSERT INTO patient_activity_log (patient_id, activity, created_at)
                 VALUES (%s, %s, NOW())
             """, (patient_id, "activity: result added."))
@@ -662,25 +651,19 @@ def verify_test(test_id):
         code = int(data.get("code", 0))
 
         cursor.execute("""
-            SELECT result_value 
-            FROM patient_results 
-            WHERE counter_id = %s AND test_profile_id = %s
-        """, (counter_id, test_id))
-        result_exists = cursor.fetchone()
-        print("result", result_exists)
-
-        if not result_exists.get('result_value'):
-            cursor.close()
-            return jsonify({
-                "message": "No result found for this test, status not changed",
-                "status": 0
-            }), 200
-
-        cursor.execute("""
             UPDATE patient_tests
-            SET status = 1
+            SET status = %s, verified_at = now()
             WHERE counter_id = %s AND test_id = %s
-        """, (counter_id, test_id))
+        """, (code, counter_id, test_id))
+        #ham  ne dekhna he k es counter id ki koi test abhi tak 0 matlab unverified he
+        #if yes. mean han unverfied hen to counter ka stuatus unverified rakho.
+        #agar all verified ho gae hen to then counter ka status change kr do.
+        cursor.execute("SELECT COUNT(*) AS total FROM patient_tests WHERE status=0 AND counter_id = %s", (counter_id,))
+        count = cursor.fetchone()['total']
+        if count > 0:
+             cursor.execute("UPDATE counter SET status = 1 WHERE id = %s", (counter_id,))
+        else:
+             cursor.execute("UPDATE counter SET status = 2 WHERE id = %s", (counter_id,))
 
         mysql.connection.commit()
         cursor.close()
