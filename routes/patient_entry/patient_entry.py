@@ -658,51 +658,43 @@ def verify_test(test_id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         data = request.get_json()
-        code = int(data.get("code", 0))
         counter_id = data.get("counter_id")
-        verified_by = data.get("verified_by")
+        code = int(data.get("code", 0))
 
-        if code == 1:      
-            update_query = """
-                UPDATE patient_tests
-                SET status = 'verified', verified_at = NOW(), verified_by = %s
-                WHERE test_id = %s AND counter_id = %s
-            """
-            cursor.execute(update_query, (verified_by, test_id, counter_id))
-            mysql.connection.commit()
-            
-        if code == 0:
-            update_query = """
+        cursor.execute("""
+            SELECT result_value 
+            FROM patient_results 
+            WHERE counter_id = %s AND test_profile_id = %s
+        """, (counter_id, test_id))
+        result_exists = cursor.fetchone()
+        print("result", result_exists)
+
+        if not result_exists.get('result_value'):
+            cursor.close()
+            return jsonify({
+                "message": "No result found for this test, status not changed",
+                "status": 0
+            }), 200
+
+        cursor.execute("""
             UPDATE patient_tests
-            SET status = 'verify', verified_at = NOW(), verified_by = %s
-            WHERE test_id = %s AND counter_id = %s
-            """
-            cursor.execute(update_query, (verified_by, test_id, counter_id))
-            mysql.connection.commit()
-            
-            check_query = """
-                SELECT status, patient_id
-                FROM patient_tests
-                WHERE test_id = %s
-            """
-            cursor.execute(check_query, (test_id,))
-            result = cursor.fetchone()
+            SET status = 1
+            WHERE counter_id = %s AND test_id = %s
+        """, (counter_id, test_id))
 
-            if result and result["status"] == "verified":
-                pt_id = result["patient_id"]
-                
-                cursor.execute("""
-                    UPDATE counter 
-                    SET status = 'verified'
-                    WHERE patient_id = %s AND id = %s
-                """, (pt_id,counter_id))
-                mysql.connection.commit()
-
+        mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Test verified successfully"}), 200
+
+        return jsonify({
+            "message": "Status updated successfully",
+            "test_id": test_id,
+            "counter_id": counter_id,
+            
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+ 
 
 #------------------------------- #TODO GET Unverifyed data --------------------
 
