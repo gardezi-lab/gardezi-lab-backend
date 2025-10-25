@@ -83,8 +83,9 @@ def generate_report(id):
             cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
             resulttest = cursor.fetchone()
             detaildetail = resulttest['detail']
-            print("intp ki id details text", detaildetail)
-            print("intp ki test id", test_id)
+            cursor.execute("SELECT comment FROM patient_tests WHERE test_id = %s AND counter_id= %s", (intprid, id,)) 
+            comresult = cursor.fetchone()
+            commentcomment = comresult['comment']
             
 
             cursor.execute("""
@@ -92,7 +93,6 @@ def generate_report(id):
         c.date_created AS test_datetime,
         p.parameter_name,
         pt.counter_id AS rowcounterid,
-        pt.comment,
         p.unit,
         p.normalvalue,
         pr.result_value,
@@ -128,7 +128,6 @@ def generate_report(id):
                     parameters_dict[pname] = {
                         "parameter_name": pname,
                         "unit": row['unit'],
-                        'comment' : row['comment'],
                         "normalvalue": row['normalvalue'],
                         "results_by_date": {},
                         "cutoff_by_date": {}
@@ -152,15 +151,10 @@ def generate_report(id):
                     "result_value": results
                 })
                 
-                
-                
-                
-
-
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
-                "comment" : pdata['comment'],
+                "comment" : commentcomment,
                 'intr_detail': detaildetail,
                 "test_type": test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),
