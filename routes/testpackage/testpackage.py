@@ -115,7 +115,7 @@ def get_package(id):
                 return jsonify({"error": "No valid test IDs found"}), 400
         
             placeholders = ', '.join(['%s'] * len(test_ids))
-            query = f"SELECT id, test_name, delivery_time FROM test_profiles WHERE id IN ({placeholders})"
+            query = f"SELECT id, test_name, delivery_time,sample_required,fee FROM test_profiles WHERE id IN ({placeholders})"
         
             cur.execute(query, tuple(test_ids))
             result = cur.fetchall()
