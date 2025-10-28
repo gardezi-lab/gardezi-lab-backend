@@ -56,45 +56,61 @@ def create_package():
 def get_packages():
     try:
         mysql = current_app.mysql
-        cur = mysql.connection.cursor(DictCursor)
+        cursor = mysql.connection.cursor(DictCursor)
 
         # query params
-        search = request.args.get("search", "", type=str)
-        current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        # search = request.args.get("search", "", type=str)
+        # current_page = request.args.get("currentpage", 1, type=int)
+        # record_per_page = request.args.get("recordperpage", 10, type=int)
 
-        offset = (current_page - 1) * record_per_page
+        # offset = (current_page - 1) * record_per_page
 
         # base query
         base_query = "SELECT * FROM test_packages"
-        where_clauses = []
-        values = []
+        cursor.execute(base_query)
+        packages = cursor.fetchall()
+        print("package", packages)
+        
+        test_query = "SELECT test_name,sample_required, delivery_time,fee,id FROM test_profiles"
+        cursor.execute(test_query)
+        test = cursor.fetchall()
+        
+        print("test", test)
+        for p in packages:
+            p["tests"] = []
+            selected_ids = [x.strip() for x in p["selected_test"].split(",") if x.strip()]
+            for t in test:
+                if str(t["id"]) in selected_ids:
+                    p['tests'].append(t)
+        
+        
+        
+        
+        
+        # where_clauses = []
+        # values = []
 
-        if search:
-            where_clauses.append("(name LIKE %s OR selected_test LIKE %s)")
-            values.extend([f"%{search}%", f"%{search}%"])
+        # if search:
+        #     where_clauses.append("(name LIKE %s OR selected_test LIKE %s)")
+        #     values.extend([f"%{search}%", f"%{search}%"])
 
-        if where_clauses:
-            base_query += " WHERE " + " AND ".join(where_clauses)
+        # if where_clauses:
+        #     base_query += " WHERE " + " AND ".join(where_clauses)
 
-        # count total
-        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
-        cur.execute(count_query, values)
-        total_records = cur.fetchone()["total"]
+        # # count total
+        # count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
+        # cur.execute(count_query, values)
+        # total_records = cur.fetchone()["total"]
 
-        # pagination
-        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
-        values.extend([record_per_page, offset])
-        cur.execute(base_query, values)
-        packages = cur.fetchall()
+        # # pagination
+        # base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        # values.extend([record_per_page, offset])
+        
 
-        total_pages = math.ceil(total_records / record_per_page)
+        # total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
-            "data": packages,
-            "totalRecords": total_records,
-            "totalPages": total_pages,
-            "currentPage": current_page
+            "data": packages
         }), 200
 
     except Exception as e:
