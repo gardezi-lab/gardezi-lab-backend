@@ -32,6 +32,9 @@ def create_package():
     error = validate_package_data(data, is_update=False)
     if error:
         return jsonify({"error": error}), 400
+    selected_tests = data.get('selected_test', [])
+    
+    selected_tests = ','.join(str(t) for t in selected_tests)
 
     cur = mysql.connection.cursor()
     cur.execute("""
@@ -40,7 +43,7 @@ def create_package():
     """, (
         data['name'],
         data['price'],
-        data['selected_test']
+        selected_tests
     ))
     mysql.connection.commit()
     cur.close()
@@ -101,23 +104,31 @@ def get_packages():
 # -------- READ ONE (GET by id) --------
 @packages_bp.route('/<int:id>', methods=['GET'])
 def get_package(id):
-    mysql = current_app.mysql
-    cur = mysql.connection.cursor(DictCursor)
-    cur.execute("SELECT * FROM test_packages WHERE id=%s", (id,))
-    row = cur.fetchone()
-    cur.close()
+    try:
+            mysql = current_app.mysql
+            cur = mysql.connection.cursor(DictCursor)
+            cur.execute("SELECT selected_test FROM test_packages WHERE id=%s", (id,))
+            row = cur.fetchone()
+            selected_test = row['selected_test']
+            test_ids = [int(t.strip()) for t in selected_test.split(',') if t.strip().isdigit()]
+            if not test_ids:
+                return jsonify({"error": "No valid test IDs found"}), 400
+        
+            placeholders = ', '.join(['%s'] * len(test_ids))
+            query = f"SELECT id, test_name, delivery_time FROM test_profiles WHERE id IN ({placeholders})"
+        
+            cur.execute(query, tuple(test_ids))
+            result = cur.fetchall()
+        
+            cur.close()
 
-    if row:
-        return jsonify(row), 200
-        return jsonify({
-            "id": row[0],
-            "name": row[1],
-            "price": float(row[2]),
-            "selected_test": row[3],
-            "status" : 200
-        })
-    return jsonify({"error": "Package not found"}), 404
-
+            return jsonify({
+            "status": 200,
+            "package_id": id,
+            "tests": result
+            }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 # -------- UPDATE (PUT) --------
 @packages_bp.route('/<int:id>', methods=['PUT'])
@@ -128,6 +139,10 @@ def update_package(id):
     error = validate_package_data(data, is_update=True)
     if error:
         return jsonify({"error": error}), 400
+    selected_tests = data.get('selected_test', [])
+
+    selected_tests = ','.join(str(t) for t in selected_tests)
+    
 
     cur = mysql.connection.cursor()
     cur.execute("""
@@ -137,7 +152,7 @@ def update_package(id):
     """, (
         data.get('name'),
         data.get('price'),
-        data.get('selected_test'),
+        selected_tests,
         id
     ))
     mysql.connection.commit()
@@ -154,6 +169,5 @@ def delete_package(id):
     cur.execute("DELETE FROM test_packages WHERE id=%s", (id,))
     mysql.connection.commit()
     cur.close()
-    return jsonify({"message": "Package deleted"})
     return jsonify({"message": "Package deleted",
                     "status" : 200})

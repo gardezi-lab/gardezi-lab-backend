@@ -310,3 +310,50 @@ def get_patient_test_profile(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+# ----------------------------Delayed Tests----------------------------
+@test_profile_bp.route('/delayed_tests', methods=['GET'])
+def get_delayed_tests():
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        query = """
+            SELECT 
+                pt.test_id AS test_id,
+                p.id AS patient_id,
+                pt.counter_id,
+                p.patient_name,
+                p.cell,
+                tp.test_name,
+                tp.delivery_time,
+                pt.created_at,
+                pt.reporting_time,
+                TIMESTAMPDIFF(HOUR, pt.reporting_time, NOW()) AS delayed_hours
+            FROM patient_tests pt
+            JOIN patient_entry p ON pt.patient_id = p.id
+            JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE 
+                pt.result_status = 0
+                AND NOW() > pt.reporting_time
+        """
+        cursor.execute(query)
+        results = cursor.fetchall()
+        cursor.close()
+
+        if not results:
+            return jsonify({
+                "status": 404,
+                "message": "No delayed tests found."
+            }), 404
+
+        return jsonify({
+            "status": 200,
+            "message": "Delayed tests fetched successfully.",
+            "data": results
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500

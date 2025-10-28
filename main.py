@@ -5,27 +5,21 @@ import os
 
 
 # Import blueprints (only once)
+from routes.authentication.authentication import authentication_bp
 from routes.department.department import department_bp
 from routes.consultant.consultant import consultant_bp
-#from routes.parameter.parameter import parameter_bp
 from routes.interpretations.interpretations import interpretation_bp
 from routes.testpackage.testpackage import packages_bp
-
-
 from routes.user.users import users_bp 
 from routes.companies_panel.companies_panel import companies_panel_bp
 from routes.role.role import role_bp
 from routes.parameter.parameter import parameter_bp
 from routes.test_profile.test_profile import test_profile_bp
 from routes.patient_entry.patient_entry import patient_entry_bp
-from routes.authentication.authentication import authentication_bp
 from routes.invoice.invoice import invoice_bp
 from routes.addresults.addresults import results_bp
 from routes.cash.cash import cash_bp
 from routes.report.report import report_bp
-
-
-
 from routes.account_book.account import account_bp
 
 
@@ -55,8 +49,7 @@ try:
     print(" MySQL config loaded successfully:", app.config['MYSQL_HOST'], app.config['MYSQL_DB'])
 except Exception as e:
     print("MySQL config failed:", str(e))
-
-
+    
 # ---------- Manual CORS (Werkzeug / Flask) ----------
 @app.after_request
 def add_cors_headers(response):
@@ -96,11 +89,11 @@ app.register_blueprint(companies_panel_bp)
 app.register_blueprint(role_bp)
 app.register_blueprint(test_profile_bp)
 app.register_blueprint(patient_entry_bp)
-app.register_blueprint(authentication_bp)
 app.register_blueprint(invoice_bp)
 app.register_blueprint(results_bp)
-app.register_blueprint(cash_bp)
+app.register_blueprint(cash_bp) 
 app.register_blueprint(report_bp)
+app.register_blueprint(authentication_bp)
 #main
 
 app.register_blueprint(account_bp)

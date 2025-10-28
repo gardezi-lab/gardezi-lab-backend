@@ -202,3 +202,4 @@ def generate_report(id):
 
     except Exception as e:
         return jsonify({"status": 500, "error": str(e)}), 500
+
