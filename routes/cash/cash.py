@@ -12,8 +12,27 @@ mysql = MySQL()
 def get_data_cash():
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        query = "SELECT id, description, dr,cr,date FROM cash"
-        cursor.execute(query)
+        
+        from_date = request.args.get("from_date", "", type=str)
+        to_date = request.args.get("to_date", "", type=str)
+        
+        filters = []
+        params = []
+        
+        
+        if from_date and to_date:
+            filters.append("DATE(date) BETWEEN %s AND %s")
+            params.extend([from_date, to_date])
+        elif from_date:
+            filters.append("DATE(date) >= %s")
+            params.append(from_date)
+        elif to_date:
+            filters.append("DATE(date) <= %s")
+            params.append(to_date)
+        where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+        
+        query = f"SELECT id, description, dr,cr,date FROM cash {where_clause} "
+        cursor.execute(query, params)
         result = cursor.fetchall()
         cursor.close()
 
