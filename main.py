@@ -31,7 +31,7 @@ app = Flask(__name__)
 app.url_map.strict_slashes = False
 
 # file uploader configue
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Set secret key from .env
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')

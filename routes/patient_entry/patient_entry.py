@@ -313,7 +313,7 @@ def delete_file(test_id):
     return jsonify({"message": "file is delete successful"})
 
 #-------------- TODO Insert file --------------
-UPLOAD_FOLDER = 'uploads' 
+UPLOAD_FOLDER = 'static/uploads' 
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -326,13 +326,15 @@ def insert_file(test_id):
         file = request.files.get('file')
         file_path = None
         if file and allowed_file(file.filename):
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename = secure_filename(file.filename)
+            new_filename = f"{timestamp}_{filename}"
 
             # create uploads folder if not exists
             if not os.path.exists(UPLOAD_FOLDER):
                 os.makedirs(UPLOAD_FOLDER)
 
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            file_path = os.path.join(UPLOAD_FOLDER, new_filename)
             file.save(file_path)
             
             # Insert file in files
@@ -340,7 +342,7 @@ def insert_file(test_id):
             cursor.execute("""
                 INSERT INTO files (patient_test_id, file, uploaded_at, filename)
                 VALUES (%s, %s,NOW(), %s)
-            """, (test_id, file_path, filename))
+            """, (test_id, file_path, new_filename))
             
         mysql.connection.commit()
         cursor.close()
