@@ -253,7 +253,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
 
         # select file from files table
         cursor.execute("""
-                        SELECT * FROM files WHERE test_id = %s AND counter_id = %s AND patient_id = %s""",(test_profile_id, id, patient_id))
+                        SELECT * FROM files WHERE test_id = %s AND counter_id = %s AND patient_id = %s""",(test_id, id, patient_id))
         get_file = cursor.fetchone()
         if get_file:
             filfile = get_file['file']
