@@ -8,6 +8,7 @@ import MySQLdb
 from werkzeug.utils import secure_filename
 import json
 import random
+import os
 
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
@@ -250,14 +251,6 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s
         """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
-
-        # select file from files table
-        cursor.execute("""
-                        SELECT * FROM files WHERE test_id = %s AND counter_id = %s AND patient_id = %s""",(test_id, id, patient_id))
-        get_file = cursor.fetchone()
-        filfile = None
-        if get_file:
-            filfile = get_file['file']
         
         cursor.execute("""
             SELECT comment,status,result_status
@@ -299,7 +292,6 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             "test_id": test_id,
             "patient_id": patient_id,
             "comment"  : comment,
-            "filefile":filfile,
             "status"  : status,
             "result_status": result_status,
             "test_type" : test_type,
@@ -308,34 +300,28 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-# ---------TODO delete file from file table by patient_id, counter_id, test_id--------
-@patient_entry_bp.route('/delete_file/<int:test_id>/<int:patient_id>/<int:counter_id>', methods=['DELETE'])
-def delete_file(test_id, patient_id, counter_id):
+# ---------TODO delete file from file table by id--------
+@patient_entry_bp.route('/delete_file/<int:test_id>/', methods=['DELETE'])
+def delete_file(test_id):
     cursor = mysql.connection.cursor()
     
-    query = "DELETE FROM files WHERE test_id = %s AND patient_id = %s AND counter_id = %s"
-    cursor.execute(query,(test_id, patient_id, counter_id))
+    query = "DELETE FROM files WHERE id = %s "
+    cursor.execute(query,(test_id,))
     
     mysql.connection.commit()
     cursor.close()
     return jsonify({"message": "file is delete successful"})
-    
 
-#---------------------TODO Add result of patient selected test parameters by patient_test_id----
-
+#-------------- TODO Insert file --------------
 UPLOAD_FOLDER = 'uploads' 
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
-
-@patient_entry_bp.route('/test_results/<int:id>', methods=['POST'])
-def add_or_update_result(id):
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+@patient_entry_bp.route('/file/<int:test_id>', methods=["POST"])
+def insert_file(test_id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        data = request.get_json()
-        parameters = data.get("parameters", [])
-        test_profile_id = data.get("test_profile_id")
-        comment = data.get("comment")
         
         file = request.files.get('file')
         file_path = None
@@ -348,7 +334,56 @@ def add_or_update_result(id):
 
             file_path = os.path.join(UPLOAD_FOLDER, filename)
             file.save(file_path)
+            
+            # Insert file in files
+        if file_path:
+            cursor.execute("""
+                INSERT INTO files (patient_test_id, file, uploaded_at, filename)
+                VALUES (%s, %s,NOW(), %s)
+            """, (test_id, file_path, filename))
+            
+        mysql.connection.commit()
+        cursor.close()
 
+        return jsonify({
+            "message": "file uploaded  successfully",
+            "file_path": file_path
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)})
+            
+#-------------------TODO Get files ----------------
+@patient_entry_bp.route('/get_file/<int:test_id>', methods=['GET'])
+def get_files_by(test_id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        
+        query = "SELECT * FROM files WHERE patient_test_id = %s"
+        cursor.execute(query,(test_id,))
+        result = cursor.fetchall()
+        print("resutl", result)
+        return jsonify({"data": result})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+    
+        
+
+        
+#---------------------TODO Add result of patient selected test parameters by patient_test_id----
+
+@patient_entry_bp.route('/test_results/<int:id>', methods=['POST'])
+def add_or_update_result(id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+        data = request.get_json()
+        parameters = data.get("parameters", [])
+        test_profile_id = data.get("test_profile_id")
+        comment = data.get("comment")
+        
+        
         cursor.execute("""
             SELECT c.pt_id AS patient_id, pt.id AS patient_test_id 
             FROM counter c
@@ -415,21 +450,14 @@ def add_or_update_result(id):
                 VALUES (%s, %s, NOW())
             """, (patient_id, "activity: result added."))
 
-        # Insert file in files
-        if file_path:
-            cursor.execute("""
-                INSERT INTO files (patient_id, counter_id,test_id, file, uploaded_at)
-                VALUES (%s, %s, %s, %s,NOW())
-            """, (patient_id, id, test_profile_id, file_path))
-
+        
         
         mysql.connection.commit()
         cursor.close()
 
         return jsonify({
             "message": "Results saved successfully",
-            "test_profile_id": test_profile_id,
-            "file_path": file_path
+            "test_profile_id": test_profile_id
         }), 200
 
     except Exception as e:
