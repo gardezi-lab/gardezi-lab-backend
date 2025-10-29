@@ -5,8 +5,10 @@ from flask_mysqldb import MySQL
 from datetime import datetime, timedelta
 from datetime import datetime
 import MySQLdb
+from werkzeug.utils import secure_filename
 import json
 import random
+
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
 mysql = MySQL()
@@ -248,6 +250,13 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s
         """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
+
+        # select file from files table
+        cursor.execute("""
+                        SELECT * FROM files WHERE test_id = %s AND counter_id = %s AND patient_id = %s""",(test_profile_id, id, patient_id))
+        get_file = cursor.fetchone()
+        if get_file:
+            filfile = get_file['file']
         
         cursor.execute("""
             SELECT comment,status,result_status
@@ -280,7 +289,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
              param['cutoff_value'] = results_dict[parameter_id]['cutoff_value']
             else:
              param['cutoff_value'] = None 
-                
+            
             updated_parameters.append(param)
 
         cursor.close()
@@ -289,6 +298,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             "test_id": test_id,
             "patient_id": patient_id,
             "comment"  : comment,
+            "filefile":filfile,
             "status"  : status,
             "result_status": result_status,
             "test_type" : test_type,
@@ -297,8 +307,23 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ---------TODO delete file from file table by patient_id, counter_id, test_id--------
+@patient_entry_bp.route('/delete_file/<int:test_id>/<int:patient_id>/<int:counter_id>', methods=['DELETE'])
+def delete_file(test_id, patient_id, counter_id):
+    cursor = mysql.connection.cursor()
+    
+    query = "DELETE FROM files WHERE test_id = %s AND patient_id = %s AND counter_id = %s"
+    cursor.execute(query,(test_id, patient_id, counter_id))
+    
+    mysql.connection.commit()
+    cursor.close()
+    return jsonify({"message": "file is delete successful"})
+    
 
 #---------------------TODO Add result of patient selected test parameters by patient_test_id----
+
+UPLOAD_FOLDER = 'uploads' 
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 
 @patient_entry_bp.route('/test_results/<int:id>', methods=['POST'])
 def add_or_update_result(id):
@@ -311,8 +336,18 @@ def add_or_update_result(id):
         test_profile_id = data.get("test_profile_id")
         comment = data.get("comment")
         
+        file = request.files.get('file')
+        file_path = None
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
 
-        
+            # create uploads folder if not exists
+            if not os.path.exists(UPLOAD_FOLDER):
+                os.makedirs(UPLOAD_FOLDER)
+
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(file_path)
+
         cursor.execute("""
             SELECT c.pt_id AS patient_id, pt.id AS patient_test_id 
             FROM counter c
@@ -343,7 +378,6 @@ def add_or_update_result(id):
                 WHERE patient_test_id = %s AND parameter_id = %s AND patient_id = %s AND counter_id = %s
             """, (patient_test_id, parameter_id, patient_id, id))
             existing = cursor.fetchone()
-            
 
             if existing:
                 cursor.execute("""
@@ -355,7 +389,7 @@ def add_or_update_result(id):
                 cursor.execute("""
                     INSERT INTO patient_results
                     (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed, counter_id)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s, %s)
                 """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id, id))
                 
                 
@@ -380,13 +414,21 @@ def add_or_update_result(id):
                 VALUES (%s, %s, NOW())
             """, (patient_id, "activity: result added."))
 
+        # Insert file in files
+        if file_path:
+            cursor.execute("""
+                INSERT INTO files (patient_id, counter_id,test_id, file, uploaded_at)
+                VALUES (%s, %s, %s, %s,NOW())
+            """, (patient_id, id, test_profile_id, file_path))
+
         
         mysql.connection.commit()
         cursor.close()
 
         return jsonify({
             "message": "Results saved successfully",
-            "test_profile_id": test_profile_id
+            "test_profile_id": test_profile_id,
+            "file_path": file_path
         }), 200
 
     except Exception as e:
@@ -737,7 +779,7 @@ def get_unverified_tests():
 #---------------------- #TODO GET patient activiety ------------------
 
 @patient_entry_bp.route('/activity/<int:patient_id>', methods=['GET'])
-def get_patient_activity(patient_id):
+def get_patient_activity(patient_id): 
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -764,9 +806,9 @@ def get_patient_activity(patient_id):
         return jsonify({"error": str(e)}), 500
 
 
- # ---------------- Patient, tests, counter, activity_log, results all are deleted by counter id ----------------------
+ # ---------------- TODO Patient, tests, counter, activity_log, results all are deleted by counter id ----------------------
 
-@patient_entry_bp.route('/<int:id>', methods=['DELETE'])
+@patient_entry_bp.route('/all_delete/<int:id>', methods=['DELETE'])
 def delete_alldata_patient(id):
     try:
         mysql = current_app.mysql

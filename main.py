@@ -30,6 +30,9 @@ app = Flask(__name__)
 # Accept both with / without trailing slash (prevents 308 redirects)
 app.url_map.strict_slashes = False
 
+# file uploader configue
+UPLOAD_FOLDER = 'uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Set secret key from .env
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['TOKEN_EXPIRY_HOURS'] = int(os.getenv("TOKEN_EXPIRY_HOURS", 2))  # default 2 hours
