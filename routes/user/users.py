@@ -17,6 +17,7 @@ def create_user():
         name = data.get("name")
         contact_no = data.get("contact_no")
         user_name = data.get("user_name")
+        discount = data.get("discount")
         plain_password = data.get("password")
         if not plain_password:
             plain_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -30,12 +31,9 @@ def create_user():
         if isinstance(name, int) or isinstance(user_name, int):
             return jsonify({"message": "Name  or username cannot be number"}), 400
 
-        if isinstance(age, str):
-            return jsonify({"message": "Age cannot be string"}), 400
-
         insert_query = """
-            INSERT INTO users (name, contact_no, user_name, password, role, age)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO users (name, contact_no, user_name, password, role, age, discount)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         cursor = mysql.connection.cursor()
         cursor.execute(insert_query, (
@@ -44,7 +42,8 @@ def create_user():
             user_name,
             plain_password,
             role,
-            age
+            age,
+            discount
         ))
         mysql.connection.commit()
 
@@ -55,7 +54,9 @@ def create_user():
             "user_name": user_name,
             "role": role,
             "age": age,
-            "password": plain_password
+            "password": plain_password,
+            "discount": discount
+            
         }), 201
 
     except Exception as e:
@@ -75,7 +76,7 @@ def get_users():
         offset = (current_page - 1) * record_per_page
 
         # base query
-        base_query = "SELECT id, name, contact_no, user_name, password, role, age FROM users"
+        base_query = "SELECT id, name, contact_no, user_name, password, role, age, discount FROM users"
         where_clauses = []
         values = []
 
@@ -116,7 +117,7 @@ def get_user_by_id(id):
     try:
         cursor = mysql.connection.cursor(DictCursor)
         cursor.execute("""
-            SELECT id, name, contact_no, user_name, password, role, age 
+            SELECT id, name, contact_no, user_name, password, role, age,discount 
             FROM users WHERE id = %s
         """, (id,))
         row = cursor.fetchone()
@@ -139,6 +140,7 @@ def update_user(id):
         # plain_password = data.get("password")
         role = data.get("role")
         age = data.get("age")
+        discount = data.get("discount")
 
         # Check user exists
         cursor = mysql.connection.cursor()
@@ -148,11 +150,11 @@ def update_user(id):
 
         update_query = """
             UPDATE users
-            SET name=%s, contact_no=%s, user_name=%s,  role=%s, age=%s
+            SET name=%s, contact_no=%s, user_name=%s,  role=%s, age=%s, discount=%s
             WHERE id=%s
         """
         cursor.execute(update_query, (
-            name, contact_no, user_name, role, age, id
+            name, contact_no, user_name, role, age, discount, id
         ))
         mysql.connection.commit()
 
