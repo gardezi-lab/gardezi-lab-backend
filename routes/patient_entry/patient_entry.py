@@ -808,7 +808,7 @@ def get_patient_activity(patient_id):
 
  # ---------------- TODO Patient, tests, counter, activity_log, results all are deleted by counter id ----------------------
 
-@patient_entry_bp.route('/<int:id>', methods=['DELETE'])
+@patient_entry_bp.route('/all_delete/<int:id>', methods=['DELETE'])
 def delete_alldata_patient(id):
     try:
         mysql = current_app.mysql
