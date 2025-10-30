@@ -69,19 +69,19 @@ def get_packages():
         base_query = "SELECT * FROM test_packages"
         cursor.execute(base_query)
         packages = cursor.fetchall()
-        print("package", packages)
+        # print("package", packages)
         
-        test_query = "SELECT test_name,sample_required, delivery_time,fee,id FROM test_profiles"
-        cursor.execute(test_query)
-        test = cursor.fetchall()
+        # test_query = "SELECT test_name,sample_required, delivery_time,fee,id FROM test_profiles"
+        # cursor.execute(test_query)
+        # test = cursor.fetchall()
         
-        print("test", test)
-        for p in packages:
-            p["tests"] = []
-            selected_ids = [x.strip() for x in p["selected_test"].split(",") if x.strip()]
-            for t in test:
-                if str(t["id"]) in selected_ids:
-                    p['tests'].append(t)
+        # print("test", test)
+        # for p in packages:
+        #     p["tests"] = []
+        #     selected_ids = [x.strip() for x in p["selected_test"].split(",") if x.strip()]
+        #     for t in test:
+        #         if str(t["id"]) in selected_ids:
+        #             p['tests'].append(t)
         
         
         
