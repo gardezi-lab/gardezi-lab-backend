@@ -428,7 +428,7 @@ def add_or_update_result(id):
                 cursor.execute("""
                     INSERT INTO patient_results
                     (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed, counter_id)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s)
                 """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id, id))
                 
                 
