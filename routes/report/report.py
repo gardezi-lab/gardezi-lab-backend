@@ -86,6 +86,16 @@ def generate_report(id):
             cursor.execute("SELECT comment FROM patient_tests WHERE test_id = %s AND counter_id= %s", (test_id, id,)) 
             comresult = cursor.fetchone()
             commentcomment = comresult['comment']
+            # Get department againt test_id
+            cursor.execute("SELECT department_id FROM test_profiles WHERE id = %s", (test_id,)) 
+            testdepart = cursor.fetchone()
+            departtest = testdepart['department_id']
+            cursor.execute("SELECT department_name FROM departments WHERE id = %s ", (departtest,))
+            result = cursor.fetchone()
+            department_name = result['department_name']
+            
+            
+            
             
 
             cursor.execute("""
@@ -156,6 +166,7 @@ def generate_report(id):
                 "fee": fee,
                 "comment" : commentcomment,
                 'intr_detail': detaildetail,
+                'department':department_name,
                 "test_type": test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),
                 "dates": date_set,
