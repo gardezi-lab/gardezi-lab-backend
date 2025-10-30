@@ -1,7 +1,7 @@
 import math
 from flask import Flask, request, jsonify, Blueprint, current_app
 from MySQLdb.cursors import DictCursor
-from flask_mysqldb import MySQL
+from flask_mysqldb import MySQL    
 from datetime import datetime, timedelta
 from datetime import datetime
 import MySQLdb
@@ -310,7 +310,7 @@ def delete_file(test_id):
     
     mysql.connection.commit()
     cursor.close()
-    return jsonify({"message": "file is delete successful"})
+    return jsonify({"message": "file is delete successful", "status": 200})
 
 #-------------- TODO Insert file --------------
 UPLOAD_FOLDER = 'static/uploads' 
@@ -349,7 +349,8 @@ def insert_file(test_id):
 
         return jsonify({
             "message": "file uploaded  successfully",
-            "file_path": file_path
+            "file_path": file_path,
+            "status": 201
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -365,7 +366,7 @@ def get_files_by(test_id):
         cursor.execute(query,(test_id,))
         result = cursor.fetchall()
         print("resutl", result)
-        return jsonify({"data": result})
+        return jsonify({"data": result, "status": 200})
     except Exception as e:
         return jsonify({"error": str(e)})
     
