@@ -16,50 +16,33 @@ def get_companies_panels():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         # query params
-        search = request.args.get("search", "", type=str)
-        current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
-
-        offset = (current_page - 1) * record_per_page
-
+        from_date = request.args.get("from_date", "", type=str)
+        to_date = request.args.get("to_date", "", type=str)
+        
+        filters = []
+        params = []
+        
+        if from_date and to_date:
+            filters.append("DATE(created_at) BETWEEN %s AND %s")
+            params.extend([from_date, to_date])
+        elif from_date:
+            filters.append("DATE(created_at) >= %s")
+            params.append(from_date)
+        elif to_date:
+            filters.append("DATE(created_at) <= %s")
+            params.append(to_date)
+            
+        where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+        
         # base query
-        base_query = "SELECT * FROM companies_panel"
-        where_clauses = []
-        values = []
-
-        if search:
-            where_clauses.append(
-                "(company_name LIKE %s OR head_name LIKE %s OR user_name LIKE %s)"
-            )
-            values.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
-
-        if where_clauses:
-            base_query += " WHERE " + " AND ".join(where_clauses)
-
-        # total count
-        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
-        cursor.execute(count_query, values)
-        total_records = cursor.fetchone()["total"]
-
-        # add pagination
-        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
-        values.extend([record_per_page, offset])
-
-        cursor.execute(base_query, values)
-        companies = cursor.fetchall()
-
-        total_pages = math.ceil(total_records / record_per_page)
-
+        base_query = f"SELECT * FROM companies_panel {where_clause}"
+        
+        cursor.execute(base_query,params)
+        company_panel = cursor.fetchall()
+        
         return jsonify({
-            "data": companies,
-            "totalRecords": total_records,
-            "totalPages": total_pages,
-            "currentPage": current_page
-        }), 200
-
-        return jsonify({
-            "status" : 200,
-            "data": paginate_query(cursor, base_query)
+            "data": company_panel,
+            "status": 200
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -75,28 +58,12 @@ def create_companies_panel():
     user_name = data.get('user_name')
     age = data.get('age')
 
-    # required fields validation
-    if not company_name or not head_name or not contact_no or not user_name or not age:
-        return jsonify({"error": "All fields are required"}), 400
-
-    # type validation
-    errors = []
-    if not isinstance(company_name, str):
-        errors.append("company_name must be a string")
-    if not isinstance(head_name, str):
-        errors.append("head_name must be a string")
-    if not isinstance(user_name, str):
-        errors.append("user_name must be a string")
-    if not isinstance(age, int):
-        errors.append("age must be an integer")
-    if errors:
-        return jsonify({"error": errors}), 400
 
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
         cursor.execute(
-            "INSERT INTO companies_panel (company_name, head_name, contact_no, user_name, age) VALUES (%s, %s, %s, %s, %s)",
+            "INSERT INTO companies_panel (company_name, head_name, contact_no, user_name, age, created_at) VALUES (%s, %s, %s, %s, %s, NOW())",
             (company_name, head_name, contact_no, user_name, age)
         )
         mysql.connection.commit()
