@@ -324,6 +324,7 @@ def get_delayed_tests():
                 p.id AS patient_id,
                 pt.counter_id,
                 p.patient_name,
+                p.mr_number,
                 p.cell,
                 tp.test_name,
                 tp.delivery_time,
