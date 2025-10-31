@@ -30,7 +30,8 @@ def create_patient_entry():
         father_hasband_MR = data.get('father_hasband_MR')
         age = data.get('age')
         company_id = data.get('company_id')
-        users_id = data.get('users_id')
+        user_id = data.get('user_id')
+        reff_by = data.get('reff_by')
         gender = data.get('gender')
         email = data.get('email')
         address = data.get('address')
@@ -69,13 +70,13 @@ def create_patient_entry():
             insert_query = """
         INSERT INTO patient_entry 
         (cell, patient_name, father_hasband_MR, age, gender,
-         email, address, users_id, company_id, package_id)
+         email, address, user_id, company_id, package_id)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
             cursor.execute(insert_query, (
         cell, patient_name, father_hasband_MR, age,
         gender, email, address,
-        users_id, company_id, package_id
+        user_id, company_id, package_id
     ))
             patient_id = cursor.lastrowid
             print("Inserted patient_id:", patient_id)
@@ -83,8 +84,8 @@ def create_patient_entry():
             patient_id = patient_id_posted
             print("Existing patient_id:", patient_id)
 
-        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount,date_created)VALUES(%s, %s, %s, %s, %s, %s ,%s, NOW())"""
-        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount))
+        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount,date_created, user_id, reff_by)VALUES(%s, %s, %s, %s, %s, %s ,%s, NOW(), %s ,%s)"""
+        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, user_id, reff_by))
 
         counter_id = cursor.lastrowid
         print("counter_id", counter_id)
@@ -711,7 +712,8 @@ def update_patient_entry(id):
         total_fee = data.get('total_fee')
         company_id = data.get('company_id')
         package_id = data.get('package_id')
-        users_id = data.get('users_id')
+        reff_by = data.get('reff_by')
+        user_id = data.get('user_id')
         tests = data.get('test', [])  
         print("tests",tests)
 
@@ -720,22 +722,22 @@ def update_patient_entry(id):
             UPDATE patient_entry
             SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, gender=%s,
                 email=%s, address=%s, company_id=%s,
-                package_id=%s, users_id=%s
+                package_id=%s, user_id=%s
             WHERE id=%s
         """
         cursor.execute(update_query, (
             cell, patient_name, father_hasband_MR, age, gender, email, address,
-            company_id, package_id, users_id, patient_id  
+            company_id, package_id, user_id, patient_id  
         ))
 
         
         counter_update = """
             UPDATE counter 
-            SET total_fee=%s, paid=%s, discount=%s, remarks=%s, priority=%s, sample=%s 
+            SET total_fee=%s, paid=%s, discount=%s, remarks=%s, priority=%s, sample=%s , reff_by=%s 
             WHERE pt_id=%s
         """
         cursor.execute(counter_update, (
-            total_fee, paid, discount, remarks, priority, sample, patient_id  
+            total_fee, paid, discount, remarks, priority, sample, reff_by, patient_id  
         ))
 
         
@@ -817,7 +819,7 @@ def verify_test(test_id):
         data = request.get_json()
         counter_id = data.get("counter_id")
         code = int(data.get("code", 0))
-        verified_sts = "Verified" if code == 0 else "Unverified"
+        verified_sts = "Unverified" if code == 0 else "Verified"
 
         cursor.execute("""
             UPDATE patient_tests
