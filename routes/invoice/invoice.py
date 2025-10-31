@@ -14,6 +14,7 @@ mysql = MySQL()
 def generate_invoice(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+       
 
      
         cursor.execute("SELECT pt_id, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
@@ -29,6 +30,15 @@ def generate_invoice(id):
         paid = result['paid']
         discount = result['discount']
         
+        pt_entry_log = "Invoice Printerd"
+        print('pt id', patient_id)
+        print('counter_id', id)
+        print('log', pt_entry_log)
+        cursor.execute("""
+                INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                VALUES (%s, %s, %s, NOW())
+            """, (patient_id, id, pt_entry_log))
+        mysql.connection.commit()
 
        
         cursor.execute("""

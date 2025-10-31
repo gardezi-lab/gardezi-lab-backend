@@ -27,6 +27,15 @@ def generate_report(id):
         total_fee = result['total_fee']
         paid = result['paid']
         discount = result['discount']
+        pt_entry_log = "Report Printerd"
+        print('pt id', patient_id)
+        print('counter_id', id)
+        print('log', pt_entry_log)
+        cursor.execute("""
+                INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                VALUES (%s, %s, %s, NOW())
+            """, (patient_id, id, pt_entry_log))
+        mysql.connection.commit()
         
         cursor.execute("""
             SELECT 

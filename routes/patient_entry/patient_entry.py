@@ -98,6 +98,7 @@ def create_patient_entry():
         )
 
         inserted_tests = []
+        inserted_tests_names = []
 
         for test_obj in test_list:
             test_id = test_obj.get("id")
@@ -118,6 +119,8 @@ def create_patient_entry():
                 "test_id": test_id,
                 "test_name": test_name,
             })
+            inserted_tests_names.append(test_name)
+        comma_names = ",".join(inserted_tests_names)
 
         # --- Step 6: Insert into Cash Table ---
         cursor.execute(
@@ -126,9 +129,10 @@ def create_patient_entry():
         )
 
         now_time = datetime.now()
+        pt_entry_log = f"New Patient Entry: Tests: '{comma_names}', Amount: {total_fee}, Discount: {discount}, Paid: {paid}"
         cursor.execute(
-            "INSERT INTO patient_activity_log (patient_id, activity, created_at) VALUES (%s, %s, %s)",
-            (patient_id, "Patient Entry Created", now_time)
+            "INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at) VALUES (%s, %s, %s, %s)",
+            (patient_id, counter_id, pt_entry_log, now_time)
         )
 
         mysql.connection.commit()
@@ -303,11 +307,30 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
 # ---------TODO delete file from file table by id--------
 @patient_entry_bp.route('/delete_file/<int:test_id>/', methods=['DELETE'])
 def delete_file(test_id):
-    cursor = mysql.connection.cursor()
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    print("file table ki delete id", test_id)
+    cursor.execute("SELECT patient_test_id FROM files WHERE id = %s", (test_id,))
+    pt_test = cursor.fetchone()
+    patient_test_id = pt_test['patient_test_id']
+    print("patient test id", patient_test_id)
     
+    
+    cursor.execute("SELECT patient_id, counter_id, test_id FROM patient_tests WHERE id = %s", (patient_test_id,))
+    countme = cursor.fetchone()
+    patient_id = countme['patient_id']
+    counter_id = countme['counter_id']
+    tests_id = countme['test_id']
+            
+    cursor.execute("SELECT test_name FROM test_profiles WHERE id = %s", (tests_id,))
+    count = cursor.fetchone()
+    test_name_show = count['test_name']
+    pt_entry_log = f"File deleted  Test: {test_name_show}"
+    cursor.execute("""
+                    INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                        VALUES (%s, %s, %s, NOW())
+                    """, (patient_id, counter_id, pt_entry_log))
     query = "DELETE FROM files WHERE id = %s "
     cursor.execute(query,(test_id,))
-    
     mysql.connection.commit()
     cursor.close()
     return jsonify({"message": "file is delete successful", "status": 200})
@@ -343,6 +366,21 @@ def insert_file(test_id):
                 INSERT INTO files (patient_test_id, file, uploaded_at, filename)
                 VALUES (%s, %s,NOW(), %s)
             """, (test_id, file_path, new_filename))
+            
+            cursor.execute("SELECT patient_id, counter_id, test_id FROM patient_tests WHERE id = %s", (test_id,))
+            countme = cursor.fetchone()
+            patient_id = countme['patient_id']
+            counter_id = countme['counter_id']
+            tests_id = countme['test_id']
+            
+            cursor.execute("SELECT test_name FROM test_profiles WHERE id = %s", (tests_id,))
+            count = cursor.fetchone()
+            test_name_show = count['test_name']
+            pt_entry_log = f"File attached  Test: {test_name_show}"
+            cursor.execute("""
+                        INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                        VALUES (%s, %s, %s, NOW())
+                    """, (patient_id, counter_id, pt_entry_log))
             
         mysql.connection.commit()
         cursor.close()
@@ -446,10 +484,15 @@ def add_or_update_result(id):
 
 
             # ---  Insert into patient_activity_log ---
+        cursor.execute("SELECT test_name FROM test_profiles WHERE id = %s", (test_profile_id,))
+        count = cursor.fetchone()
+        test_name_show = count['test_name']
+        pt_entry_log = f"Result updated for Tests: {test_name_show}"
+
         cursor.execute("""
-                INSERT INTO patient_activity_log (patient_id, activity, created_at)
-                VALUES (%s, %s, NOW())
-            """, (patient_id, "activity: result added."))
+                INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                VALUES (%s, %s, %s, NOW())
+            """, (patient_id, id, pt_entry_log))
 
         
         
@@ -473,21 +516,32 @@ def update_fee(id):
         data = request.get_json()
         new_paid = int(data.get("paid"))
 
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT paid, total_fee FROM counter WHERE id=%s", (id,))
         result = cursor.fetchone()
         if not result:
             return jsonify({"message": "Record not found"}), 404
 
-        old_paid, total_fee = result
-        total_paid = old_paid + new_paid
-        total_result = total_paid - total_fee
-        
+        old_paid = int(result['paid'])
+        total_fee = int(result['total_fee'])
+
+        total_paid = old_paid + int(new_paid)
         paid = total_paid
         
         cursor.execute("UPDATE counter SET paid = %s WHERE id=%s", (total_paid, id))
         mysql.connection.commit()
-        cursor.close()
+        cursor.execute("SELECT pt_id FROM counter WHERE id = %s", (id,))
+        count = cursor.fetchone()
+        pt_id_show = count['pt_id']
+        pt_entry_log = f"Amount received, Amount: {new_paid}"
+
+        cursor.execute("""
+                INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                VALUES (%s, %s, %s, NOW())
+            """, (pt_id_show, id, pt_entry_log))
+        
+        mysql.connection.commit()
+
 
         return jsonify({"message": "Updated", "paid": total_paid,"total": total_fee}), 200
     except Exception as e:
@@ -687,16 +741,29 @@ def update_patient_entry(id):
         
         cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s AND  patient_id = %s", (patient_id,id,))
 
-        print(tests)
+        inserted_tests_names = []
+        
         for test in tests:
+            test_name = test.get('name')
             delivery_time_hours = test.get('testDeliveryTime', 0)
             delivery_datetime = datetime.now() + timedelta(hours=delivery_time_hours)
             test_id = test.get('id')
             print("Inserting test:", test_id)
             cursor.execute("""
                 INSERT INTO patient_tests (patient_id, test_id, reporting_time,counter_id)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s)
             """, (patient_id, test_id, delivery_datetime, id,))
+            
+            inserted_tests_names.append(test_name)
+            comma_names = ",".join(inserted_tests_names)
+            
+        now_time = datetime.now()
+        pt_entry_log = f"Patient Updated: Tests: '{comma_names}', Amount: {total_fee}, Discount: {discount}, Paid: {paid}"
+        
+        cursor.execute(
+            "INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at) VALUES (%s, %s, %s, %s)",
+            (patient_id, id, pt_entry_log, now_time)
+        )
 
         
         mysql.connection.commit()
@@ -750,6 +817,7 @@ def verify_test(test_id):
         data = request.get_json()
         counter_id = data.get("counter_id")
         code = int(data.get("code", 0))
+        verified_sts = "Verified" if code == 0 else "Unverified"
 
         cursor.execute("""
             UPDATE patient_tests
@@ -765,6 +833,17 @@ def verify_test(test_id):
              cursor.execute("UPDATE counter SET status = 1 WHERE id = %s", (counter_id,))
         else:
              cursor.execute("UPDATE counter SET status = 2 WHERE id = %s", (counter_id,))
+        cursor.execute("SELECT test_name FROM test_profiles WHERE id = %s", (test_id,))
+        count = cursor.fetchone()
+        test_name_show = count['test_name']
+        cursor.execute("SELECT pt_id FROM counter WHERE id = %s", (counter_id,))
+        count = cursor.fetchone()
+        pt_id = count['pt_id']
+        pt_entry_log = f" {verified_sts}, Test: {test_name_show}"
+        cursor.execute("""
+                        INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                        VALUES (%s, %s, %s, NOW())
+                    """, (pt_id, counter_id, pt_entry_log))
 
         mysql.connection.commit()
         cursor.close()
@@ -818,7 +897,7 @@ def get_patient_activity(patient_id):
         cursor.execute("""
             SELECT activity,  created_at
             FROM patient_activity_log
-            WHERE patient_id = %s
+            WHERE counter_id = %s
             ORDER BY created_at ASC
         """, (patient_id,))
         activities = cursor.fetchall()
