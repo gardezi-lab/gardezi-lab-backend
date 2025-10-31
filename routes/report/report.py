@@ -44,7 +44,7 @@ def generate_report(id):
         cursor.execute("""
             SELECT 
                 id, patient_name, cell, gender, age, 
-                users_id, MR_number
+                user_id, MR_number
             FROM patient_entry
             WHERE id = %s
         """, (patient_id,))
@@ -206,7 +206,7 @@ def generate_report(id):
                 "patient_id": patient['id'],
                 "patient_name": patient['patient_name'],
                 "cell": patient['cell'],
-                "user_id": patient['users_id'],
+                "reff_by": reff_by_name,
                 "gender": patient['gender'],
                 "age": patient['age'],
                 "MR_number": patient['MR_number'],
