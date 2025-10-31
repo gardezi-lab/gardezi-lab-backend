@@ -40,10 +40,19 @@ def create_patient_entry():
         priority = data.get('priority')
         remarks = data.get('remarks')
         discount = data.get('discount', 0)
+        pending_discount=0
         total_fee = data.get('total_fee', 0)
         paid = data.get('paid', 0)
         test_list = data.get('test', [])
         print("Payload received:", data)
+        
+        #userid ka discount percentage. 
+        
+        #total amount ka utna percent nikalo
+        
+        #if allowed dicsount limit is more than given discount 
+        
+        #dono variables ko change kr do
 
         # --- Validations ---
         errors = []
@@ -55,7 +64,7 @@ def create_patient_entry():
             errors.append("Gender is required.")
         if not sample or not str(sample).strip():
             errors.append("Sample is required.")
-        if not users_id:
+        if not user_id:
             errors.append("users is required.")
 
         if errors:
@@ -64,6 +73,21 @@ def create_patient_entry():
         age = str(age)
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
+        
+        #userid ka discount percentage. 
+        cursor.execute("SELECT discount FROM users WHERE id = %s", (user_id,))
+        result = cursor.fetchone()
+        user_allowed_discount = result['discount']
+        #total amount ka utna percent nikalo
+        discount_amount_allowed = (int(total_fee) * int(user_allowed_discount)) / 100
+        
+        #if allowed dicsount limit is more than given discount 
+        if int(discount) > int(discount_amount_allowed):
+            pending_discount = discount
+            discount = 0
+        #dono variables ko change kr do
+        
+        
         #patient_id_posted
 
         if patient_id_posted == 0:
@@ -84,8 +108,8 @@ def create_patient_entry():
             patient_id = patient_id_posted
             print("Existing patient_id:", patient_id)
 
-        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount,date_created, user_id, reff_by)VALUES(%s, %s, %s, %s, %s, %s ,%s, NOW(), %s ,%s)"""
-        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, user_id, reff_by))
+        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by)VALUES(%s, %s, %s, %s, %s, %s, %s ,%s, NOW(), %s ,%s)"""
+        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, pending_discount, user_id, reff_by))
 
         counter_id = cursor.lastrowid
         print("counter_id", counter_id)
@@ -510,6 +534,35 @@ def add_or_update_result(id):
 
 
 #------------------- TODO Update the test fees --------------
+
+@patient_entry_bp.route("/discount_approvel/<int:id>", methods=["PUT"])
+def discount_approvel(id):
+    try:
+        data = request.get_json()
+        discount = int(data.get("discount"))
+        user_id = int(data.get("user_id"))
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        
+        
+        cursor.execute("UPDATE counter SET discount = %s, pending_discount = %s, discount_approved_by = %s WHERE id=%s", (discount, 0, user_id, id))
+        mysql.connection.commit()
+        cursor.execute("SELECT pt_id FROM counter WHERE id = %s", (id,))
+        count = cursor.fetchone()
+        pt_id_show = count['pt_id']
+        pt_entry_log = f"Discount approved, Discount: {discount}"
+
+        cursor.execute("""
+                INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
+                VALUES (%s, %s, %s, NOW())
+            """, (pt_id_show, id, pt_entry_log))
+        
+        mysql.connection.commit()
+
+
+        return jsonify({"message": "Updated", "discount": discount}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500        
+#----------------Discount Approvel  --------------
 
 @patient_entry_bp.route("/update_fee/<int:id>", methods=["PUT"])
 def update_fee(id):
