@@ -17,7 +17,7 @@ def generate_invoice(id):
        
 
      
-        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
+        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount, user_id FROM counter WHERE id = %s", (id,))
         result = cursor.fetchone()
 
         if not result:
@@ -105,7 +105,7 @@ def generate_invoice(id):
                 "patient_id": patient['id'],
                 "patient_name": patient['patient_name'],
                 "cell": patient['cell'],
-                "user_id": patient['users_id'],
+                "reff_by": reff_by_name,
                 "gender": patient['gender'],
                 "age": patient['age'],
                 "MR_number": patient['MR_number'],
