@@ -17,18 +17,22 @@ def generate_invoice(id):
        
 
      
-        cursor.execute("SELECT pt_id, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
+        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
         result = cursor.fetchone()
 
         if not result:
             return jsonify({"status": 404, "message": "Counter not found"}), 404
 
         patient_id = result['pt_id']
+        reff_by = result['reff_by']
         remarks = result['remarks']
         sample = result['sample']
         total_fee = result['total_fee']
         paid = result['paid']
         discount = result['discount']
+        cursor.execute("SELECT name FROM users WHERE id = %s", (reff_by,))
+        result = cursor.fetchone()
+        reff_by_name=result['name']
         
         pt_entry_log = "Invoice Printerd"
         print('pt id', patient_id)
@@ -43,8 +47,7 @@ def generate_invoice(id):
        
         cursor.execute("""
             SELECT 
-                id, patient_name, cell, gender, age, 
-                users_id, MR_number
+                id, patient_name, cell, gender, age, MR_number
             FROM patient_entry
             WHERE id = %s
         """, (patient_id,))
@@ -112,6 +115,7 @@ def generate_invoice(id):
             },
             "tests": test_list,
             "total_fee": total_fee,
+            "reff_by": reff_by_name,
             "discount": discount,
             "paid": paid,
             "unpaid": unpaid,
