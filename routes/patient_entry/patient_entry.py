@@ -689,6 +689,7 @@ def patient_get_by_id(id):
         cursor.execute("""
             SELECT 
                 c.id AS id,
+                c.reff_by,
                 c.pt_id AS patient_id,
                 c.total_fee, 
                 c.paid ,
