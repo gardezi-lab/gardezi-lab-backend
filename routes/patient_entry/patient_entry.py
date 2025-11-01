@@ -94,8 +94,8 @@ def create_patient_entry():
             insert_query = """
         INSERT INTO patient_entry 
         (cell, patient_name, father_hasband_MR, age, gender,
-         email, address, user_id, company_id, package_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        email, address, user_id, package_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
             cursor.execute(insert_query, (
         cell, patient_name, father_hasband_MR, age,
@@ -108,8 +108,8 @@ def create_patient_entry():
             patient_id = patient_id_posted
             print("Existing patient_id:", patient_id)
 
-        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by)VALUES(%s, %s, %s, %s, %s, %s, %s ,%s, NOW(), %s ,%s)"""
-        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, pending_discount, user_id, reff_by))
+        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by,company_id)VALUES(%s,%s, %s, %s, %s, %s, %s, %s ,%s, NOW(), %s ,%s)"""
+        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, pending_discount, user_id, reff_by,company_id))
 
         counter_id = cursor.lastrowid
         print("counter_id", counter_id)
@@ -130,7 +130,7 @@ def create_patient_entry():
             test_name = test_obj.get("name")
             delivery_time_hours = test_obj.get('testDeliveryTime', 0)
             delivery_datetime = datetime.now() + timedelta(hours=delivery_time_hours)
-          
+        
             print("counter id before query", counter_id)
             print("test id before query", test_id)
             cursor.execute("""
