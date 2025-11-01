@@ -100,7 +100,7 @@ def create_patient_entry():
             cursor.execute(insert_query, (
         cell, patient_name, father_hasband_MR, age,
         gender, email, address,
-        user_id, company_id, package_id
+        user_id,  package_id
     ))
             patient_id = cursor.lastrowid
             print("Inserted patient_id:", patient_id)
@@ -108,7 +108,7 @@ def create_patient_entry():
             patient_id = patient_id_posted
             print("Existing patient_id:", patient_id)
 
-        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by,company_id)VALUES(%s,%s, %s, %s, %s, %s, %s, %s ,%s, NOW(), %s ,%s)"""
+        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by,company_id)VALUES(%s,%s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s ,%s)"""
         cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, pending_discount, user_id, reff_by,company_id))
 
         counter_id = cursor.lastrowid
