@@ -17,29 +17,36 @@ def generate_report(id):
 
         cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount FROM counter WHERE id = %s", (id,))
         result = cursor.fetchone()
+        
 
         if not result:
             return jsonify({"status": 404, "message": "Counter not found"}), 404
+        
+        
 
         patient_id = result['pt_id']
         reff_by = result['reff_by']
         remarks = result['remarks']
         sample = result['sample']
+        
         total_fee = result['total_fee']
         paid = result['paid']
         discount = result['discount']
         pt_entry_log = "Report Printerd"
+        
         cursor.execute("SELECT name FROM users WHERE id = %s", (reff_by,))
         result = cursor.fetchone()
         reff_by_name=result['name']
+        print("printing error", "no error by here ss33112200")
         print('pt id', patient_id)
         print('counter_id', id)
         print('log', pt_entry_log)
+        
         cursor.execute("""
                 INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
                 VALUES (%s, %s, %s, NOW())
             """, (patient_id, id, pt_entry_log))
-        mysql.connection.commit()
+        #mysql.connection.commit()
         
         cursor.execute("""
             SELECT 
@@ -49,6 +56,7 @@ def generate_report(id):
             WHERE id = %s
         """, (patient_id,))
         patient = cursor.fetchone()
+        
 
         if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
@@ -61,6 +69,8 @@ def generate_report(id):
         query = f"""
         SELECT 
             pt.id AS patient_test_id, 
+            pt.verified_by AS verified_by,
+            pt.verified_at AS verified_at,
             tp.id AS test_id, 
             tp.test_name,
             tp.fee,
@@ -86,10 +96,16 @@ def generate_report(id):
         
         for test in tests:
             test_id = test['test_id']
+            verified_by_id = test['verified_by']
+            verified_by_at = test['verified_at']
             patient_test_id = test['patient_test_id']
             fee = int(test.get('fee') or 0)
             total_fee += fee
             #first ham check kr rhe hen k es test me koi interpertation add he. agar add he to uski id
+            cursor.execute("SELECT name, qualification FROM users WHERE id = %s", (verified_by_id,)) 
+            resulttest = cursor.fetchone()
+            verified_by_name = resulttest['name']
+            verified_by_qualification = resulttest['qualification']
             cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
             resulttest = cursor.fetchone()
             intprid = resulttest['interpretation']
@@ -117,6 +133,7 @@ def generate_report(id):
         p.parameter_name,
         pt.counter_id AS rowcounterid,
         p.unit,
+        p.sub_heading,
         p.normalvalue,
         pr.result_value,
         pr.cutoff_value,
@@ -151,6 +168,7 @@ def generate_report(id):
                     parameters_dict[pname] = {
                         "parameter_name": pname,
                         "unit": row['unit'],
+                        "sub_heading": row['sub_heading'],
                         "normalvalue": row['normalvalue'],
                         "results_by_date": {},
                         "cutoff_by_date": {}
@@ -169,11 +187,16 @@ def generate_report(id):
                 parameters.append({
                     "parameter_name": pdata["parameter_name"],
                     "unit": pdata["unit"],
+                    "sub_heading": pdata["sub_heading"],
                     "normalvalue": pdata["normalvalue"],
                     "cutoff_value": cutoffs,
                     "result_value": results
                 })
-                
+            test_verify_info =[{
+                "name": verified_by_name,
+                "qualification": verified_by_qualification,
+                "verified_at": verified_by_at 
+            }]    
             test_list.append({
                 "test_name": test['test_name'],
                 "fee": fee,
@@ -183,6 +206,7 @@ def generate_report(id):
                 "test_type": test.get('serology_elisa'),
                 "delivery_time": test.get('reporting_time'),
                 "dates": date_set,
+                "test_verify_info": test_verify_info,
                 "parameters": parameters
             })
             
