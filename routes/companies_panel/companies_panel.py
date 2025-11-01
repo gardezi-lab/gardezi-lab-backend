@@ -151,13 +151,17 @@ def get_companies_panel_by_id(id):
         if not company:
             return jsonify({"error": "Company not found"}), 404
 
-        counter_query = "SELECT pt_id FROM counter WHERE company_id = %s"
+        counter_query = "SELECT pt_id, total_fee FROM counter WHERE company_id = %s"
         cursor.execute(counter_query,(id,))
         counter_data = cursor.fetchall()
+        
         patients = []
 
         for row in counter_data:
             pt_id = row['pt_id']
+            total_fee = row['total_fee']
+            
+            
             print("pr_id", pt_id)
         
             cursor.execute("""
@@ -167,7 +171,10 @@ def get_companies_panel_by_id(id):
             
             patient = cursor.fetchone()
             
-            patients.append(patient)
+            if patient:
+                patient['total_fee'] = total_fee
+                patients.append(patient)
+            
 
         return jsonify({
             "company": company,
