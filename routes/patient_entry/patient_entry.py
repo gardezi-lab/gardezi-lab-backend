@@ -562,7 +562,7 @@ def discount_approvel(id):
         return jsonify({"message": "Updated", "discount": discount}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500        
-#----------------Discount Approvel  --------------
+#----------------TODO Discount Approvel  --------------
 
 @patient_entry_bp.route("/update_fee/<int:id>", methods=["PUT"])
 def update_fee(id):
@@ -685,7 +685,7 @@ def patient_get_by_id(id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-         
+
         cursor.execute("""
             SELECT 
                 c.id AS id,
@@ -697,6 +697,7 @@ def patient_get_by_id(id):
                 c.sample ,
                 c.priority ,
                 c.remarks ,
+                c.company_id ,
                 pt.*
             FROM counter c
             JOIN patient_entry pt ON c.pt_id = pt.id
@@ -775,23 +776,23 @@ def update_patient_entry(id):
         update_query = """
             UPDATE patient_entry
             SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, gender=%s,
-                email=%s, address=%s, company_id=%s,
+                email=%s, address=%s,
                 package_id=%s, user_id=%s
             WHERE id=%s
         """
         cursor.execute(update_query, (
             cell, patient_name, father_hasband_MR, age, gender, email, address,
-            company_id, package_id, user_id, patient_id  
+            package_id, user_id, patient_id  
         ))
 
         
         counter_update = """
             UPDATE counter 
-            SET total_fee=%s, paid=%s, discount=%s, remarks=%s, priority=%s, sample=%s , reff_by=%s 
+            SET total_fee=%s, paid=%s, discount=%s, remarks=%s, priority=%s, sample=%s , reff_by=%s,company_id=%s 
             WHERE pt_id=%s
         """
         cursor.execute(counter_update, (
-            total_fee, paid, discount, remarks, priority, sample, reff_by, patient_id  
+            total_fee, paid, discount, remarks, priority, sample, reff_by,company_id, patient_id  
         ))
 
         
