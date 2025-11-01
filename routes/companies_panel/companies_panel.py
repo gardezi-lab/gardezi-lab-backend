@@ -150,7 +150,7 @@ def get_companies_panel(id):
 
 
 # --------------------- Companies Panel Get by ID with patient data -------------------
-@companies_panel_bp.route('/company<int:id>', methods=['GET'])
+@companies_panel_bp.route('/company/<int:id>', methods=['GET'])
 def get_companies_panel_by_id(id):
     try:
         mysql = current_app.mysql
