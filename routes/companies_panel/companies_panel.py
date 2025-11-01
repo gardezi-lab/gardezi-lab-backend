@@ -16,12 +16,15 @@ def get_companies_panels():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         # query params
+        patient_name = request.args.get("company_name", "", type=str)
         from_date = request.args.get("from_date", "", type=str)
         to_date = request.args.get("to_date", "", type=str)
         
         filters = []
         params = []
-        
+        if name:
+            filters.append("company_name LIKE %s")
+            params.append(f"%{company_name}%")
         if from_date and to_date:
             filters.append("DATE(created_at) BETWEEN %s AND %s")
             params.extend([from_date, to_date])
@@ -135,23 +138,41 @@ def get_companies_panel_by_id(id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        
+        # filtertion
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        
         cursor.execute("SELECT * FROM companies_panel WHERE id=%s", (id,))
-        result = cursor.fetchone()
-        if not result:
-            return jsonify({"error": "Companies panel not found"}), 404
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-        companies_panel = {
-            "id": result[0],
-            "company_name": result[1],
-            "head_name": result[2],
-            "contact_no": result[3],
-            "user_name": result[4],
-            "age": result[5],
-            "status": 200
-        }
-        return jsonify(companies_panel), 200
+        company = cursor.fetchone()
+        
+        if not company:
+            return jsonify({"error": "Company not found"}), 404
+
+        counter_query = "SELECT pt_id FROM counter WHERE company_id = %s"
+        cursor.execute(counter_query,(id,))
+        counter_data = cursor.fetchall()
+        patients = []
+
+        for row in counter_data:
+            pt_id = row['pt_id']
+            print("pr_id", pt_id)
+        
+            cursor.execute("""
+                SELECT * FROM patient_entry 
+                WHERE id=%s AND DATE(created_at) BETWEEN %s AND %s
+            """, (pt_id, from_date, to_date))
+            
+            patient = cursor.fetchone()
+            
+            patients.append(patient)
+
+        return jsonify({
+            "company": company,
+            
+            "patients": patients
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #-------------------------Company Search by Head Name-------------------
