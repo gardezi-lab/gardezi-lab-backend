@@ -131,10 +131,25 @@ def delete_companies_panel(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# --------------------- Companies Panel get by id -------------------
+@companies_panel_bp.route('/<int:id>', methods=['GET'])
+def get_companies_panel(id):
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+        query = "SELECT * FROM companies_panel WHERE id=%s"
+        cursor.execute(query,(id,))
+        result = cursor.fetchone()
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Companies panel not found"}), 404
+        return jsonify({"message": "Companies panel get successfully",
+                        "status": 200,
+                        "result": result}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-
-# --------------------- Companies Panel Get by ID -------------------
+# --------------------- Companies Panel Get by ID with patient data -------------------
 @companies_panel_bp.route('/<int:id>', methods=['GET'])
 def get_companies_panel_by_id(id):
     try:
