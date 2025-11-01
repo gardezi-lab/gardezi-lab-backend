@@ -267,7 +267,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
 
         
         cursor.execute("""
-            SELECT id, parameter_name, unit, normalvalue, default_value, input_type
+            SELECT id, parameter_name, unit, sub_heading, normalvalue, default_value, input_type
             FROM parameters
             WHERE test_profile_id = %s
         """, (test_id,))
@@ -872,14 +872,15 @@ def verify_test(test_id):
 
         data = request.get_json()
         counter_id = data.get("counter_id")
+        user_id = data.get("user_id")
         code = int(data.get("code", 0))
         verified_sts = "Unverified" if code == 0 else "Verified"
 
         cursor.execute("""
             UPDATE patient_tests
-            SET status = %s, verified_at = now()
+            SET status = %s, verified_at = now(), verified_by = %s
             WHERE counter_id = %s AND test_id = %s
-        """, (code, counter_id, test_id))
+        """, (code, user_id, counter_id, test_id))
         #ham  ne dekhna he k es counter id ki koi test abhi tak 0 matlab unverified he
         #if yes. mean han unverfied hen to counter ka stuatus unverified rakho.
         #agar all verified ho gae hen to then counter ka status change kr do.
