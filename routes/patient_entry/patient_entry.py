@@ -796,7 +796,7 @@ def update_patient_entry(id):
         ))
 
         
-        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s AND  patient_id = %s", (patient_id,id,))
+        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s AND  counter_id = %s", (patient_id,id,))
 
         inserted_tests_names = []
         
@@ -832,7 +832,6 @@ def update_patient_entry(id):
         }), 200
 
     except Exception as e:
-        mysql.connection.rollback()
         return jsonify({"error": str(e)}), 500
 
 
