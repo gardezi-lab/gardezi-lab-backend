@@ -22,7 +22,7 @@ def get_companies_panels():
         
         filters = []
         params = []
-        if name:
+        if patient_name:
             filters.append("company_name LIKE %s")
             params.append(f"%{company_name}%")
         if from_date and to_date:
@@ -130,6 +130,8 @@ def delete_companies_panel(id):
                         "status": 200}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
 
 
 # --------------------- Companies Panel Get by ID -------------------
