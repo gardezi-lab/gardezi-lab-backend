@@ -267,7 +267,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
 
         
         cursor.execute("""
-            SELECT id, parameter_name, unit, sub_heading, normalvalue, default_value, input_type
+            SELECT id, parameter_name, dropdown_values, unit, sub_heading, normalvalue, default_value, input_type
             FROM parameters
             WHERE test_profile_id = %s
         """, (test_id,))
