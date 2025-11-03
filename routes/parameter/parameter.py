@@ -79,6 +79,7 @@ def get_parameter(parameter_id):
                 "unit": parameter[4],
                 "normal_value": parameter[5],
                 "default_value": parameter[6],
+                "dropdown_value": parameter[9],
                 "status" : 200
             }), 200
         else:
@@ -101,6 +102,8 @@ def create_parameter(test_profile_id):
         unit = data.get("unit")
         normalvalue = data.get("normalvalue")
         default_value = data.get("default_value")
+        dropdown_value = data.get("dropdown_value")
+        
         
 
         # Check if test_profile_id exists
@@ -122,13 +125,13 @@ def create_parameter(test_profile_id):
         insert_query = """
             INSERT INTO parameters (
                 parameter_name, sub_heading, input_type, unit,
-                normalvalue, default_value,  test_profile_id
+                normalvalue, default_value, dropdown_values, test_profile_id
             )
-            VALUES ( %s, %s, %s, %s, %s, %s, %s)
+            VALUES ( %s, %s, %s, %s, %s, %s, %s,%s)
         """
         cursor.execute(insert_query, (
             parameter_name, sub_heading, input_type, unit,
-            normalvalue, default_value,  test_profile_id
+            normalvalue, default_value,dropdown_value,  test_profile_id
         ))
         mysql.connection.commit()
         cursor.close()
@@ -167,6 +170,7 @@ def get_parameters(test_profile_id):
                 IFNULL(unit, '') AS unit,
                 IFNULL(normalvalue, '') AS normalvalue,
                 IFNULL(default_value, '') AS default_value,
+                IFNULL(dropdown_values, '') AS dropdown_values,
                 test_profile_id
             FROM parameters
             WHERE test_profile_id = %s
@@ -211,11 +215,10 @@ def update_parameter(parameter_id):
         unit = data.get("unit")
         normalvalue = data.get("normalvalue") or data.get("normal_value")  #  handle both
         default_value = data.get("default_value")
+        dropdown_values = data.get("dropdown_values")
+        
 
-        # Validation: all fields required
-        if not all([parameter_name, sub_heading, input_type, unit, normalvalue, default_value]):
-            return jsonify({"error": "All fields are required"}), 400
-
+        
         # All must be strings
         if not all(isinstance(f, str) for f in [parameter_name, sub_heading, input_type, unit, normalvalue, default_value]):
             return jsonify({"error": "All fields must be strings"}), 400
@@ -231,11 +234,11 @@ def update_parameter(parameter_id):
         #  Update query
         update_query = """
             UPDATE parameters 
-            SET parameter_name=%s, sub_heading=%s, input_type=%s, unit=%s, normalvalue=%s, default_value=%s 
+            SET parameter_name=%s, sub_heading=%s, input_type=%s, unit=%s, normalvalue=%s, default_value=%s,dropdown_values=%s 
             WHERE id=%s
         """
         cur.execute(update_query, (
-            parameter_name, sub_heading, input_type, unit, normalvalue, default_value, parameter_id
+            parameter_name, sub_heading, input_type, unit, normalvalue, default_value, dropdown_values,parameter_id
         ))
 
         mysql.connection.commit()
