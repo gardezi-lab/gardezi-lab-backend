@@ -312,18 +312,17 @@ def add_value():
     
     value = data.get('value')
     parameter_id = data.get('parameter_id')
-    parameter_name = data.get('parameter_name')
     
     cursor = mysql.connection.cursor()
     
     insert_query = """
             INSERT INTO parameter_value (
-                value,parameter_id,parameter_name,created_at
+                value,parameter_id,created_at
             )
-            VALUES ( %s, %s, %s, NOW())
+            VALUES ( %s, %s, NOW())
         """
     cursor.execute(insert_query, (
-            value,parameter_id,parameter_name))
+            value,parameter_id))
     cursor.connection.commit()
     cursor.close()
     return jsonify({"message": 'value is added sucessfuly', "status": 201})
@@ -332,16 +331,15 @@ def add_value():
 def get_parameter_value(parameter_id):
     try:
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM parameter_value WHERE id = %s", (parameter_id,))
+        cur.execute("SELECT * FROM parameter_value WHERE parameter_id = %s", (parameter_id,))
         parameter = cur.fetchone()
         cur.close()
         if parameter:
             return jsonify({
                 "id": parameter[0],
-                "parameter_name": parameter[1],
-                "parameter_name": parameter[2],
-                "created_at": parameter[3],
-                "value": parameter[4],
+                "parameter_id": parameter[1],
+                "created_at": parameter[2],
+                "value": parameter[3],
                 "status" : 200
             }), 200
         else:
@@ -371,8 +369,8 @@ def delete_parameter_value(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # ----------------TODO UPDATE parameter value -----------------------
-@parameter_bp.route('/value_update/<int:id>', methods=['PUT'])
-def update_parameter_value(id):
+@parameter_bp.route('/value_update/<int:parameter_id>', methods=['PUT'])
+def update_parameter_value(parameter_id):
     try:
         data = request.get_json()
 
@@ -383,9 +381,9 @@ def update_parameter_value(id):
         cur = mysql.connection.cursor()
 
         #  Check if parameter exists
-        cur.execute("SELECT id FROM parameter_value WHERE id = %s", (id,))
+        cur.execute("SELECT id FROM parameter_value WHERE id = %s", (parameter_id,))
         if not cur.fetchone():
-            return jsonify({"error": f"Parameter with ID {id} not found"}), 404
+            return jsonify({"error": f"Parameter with ID {parameter_id} not found"}), 404
 
         #  Update query
         update_query = """
@@ -394,7 +392,7 @@ def update_parameter_value(id):
             WHERE id=%s
         """
         cur.execute(update_query, (
-            value,id,
+            value,parameter_id,
         ))
 
         mysql.connection.commit()
