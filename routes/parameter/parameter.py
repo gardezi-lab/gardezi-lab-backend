@@ -330,22 +330,27 @@ def add_value():
 @parameter_bp.route('/get_value/<int:parameter_id>', methods=['GET'])
 def get_parameter_value(parameter_id):
     try:
-        cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM parameter_value WHERE parameter_id = %s", (parameter_id,))
-        parameter = cur.fetchone()
+        cur = mysql.connection.cursor(DictCursor)
+        cur.execute("SELECT id, parameter_id,value, created_at FROM parameter_value WHERE parameter_id = %s", (parameter_id,))
+        rows = cur.fetchall()
         cur.close()
-        if parameter:
+
+        # make array of values only
+        parameter_value = [row['value'] for row in rows]
+
+        if rows:
             return jsonify({
-                "id": parameter[0],
-                "parameter_id": parameter[1],
-                "created_at": parameter[2],
-                "value": parameter[3],
-                "status" : 200
+                "id": rows[0]['id'],
+                "parameter_id": rows[0]['parameter_id'],
+                "parameter_value": parameter_value,
+                "created_at": rows[0]['created_at'],
+                "status": 200
             }), 200
         else:
             return jsonify({"error": "Parameter not found"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
+    
 # ----------------- TODO DELETE parameter value parameter_id--------------
 @parameter_bp.route('/delete_value/<int:id>', methods=['DELETE'])
 def delete_parameter_value(id):
