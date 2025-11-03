@@ -102,7 +102,7 @@ def create_parameter(test_profile_id):
         unit = data.get("unit")
         normalvalue = data.get("normalvalue")
         default_value = data.get("default_value")
-        dropdown_value = data.get("dropdown_value")
+        dropdown_value = data.get("dropdown_values")
         
         
 
