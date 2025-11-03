@@ -304,3 +304,105 @@ def search_parameter(parameter_name):
         return jsonify({"error": str(e)}), 500
 
 
+# ----------------------TODO parameters value ----------------
+@parameter_bp.route('/add_value', methods=['POST'])
+def add_value():
+    
+    data = request.get_json()
+    
+    value = data.get('value')
+    parameter_id = data.get('parameter_id')
+    parameter_name = data.get('parameter_name')
+    
+    cursor = mysql.connection.cursor()
+    
+    insert_query = """
+            INSERT INTO parameter_value (
+                value,parameter_id,parameter_name,created_at
+            )
+            VALUES ( %s, %s, %s, NOW())
+        """
+    cursor.execute(insert_query, (
+            value,parameter_id,parameter_name))
+    cursor.connection.commit()
+    cursor.close()
+    return jsonify({"message": 'value is added sucessfuly', "status": 201})
+# -------------------TODO GET value by parameter-id --------------------
+@parameter_bp.route('/get_value/<int:parameter_id>', methods=['GET'])
+def get_parameter_value(parameter_id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameter_value WHERE id = %s", (parameter_id,))
+        parameter = cur.fetchone()
+        cur.close()
+        if parameter:
+            return jsonify({
+                "id": parameter[0],
+                "parameter_name": parameter[1],
+                "parameter_name": parameter[2],
+                "created_at": parameter[3],
+                "value": parameter[4],
+                "status" : 200
+            }), 200
+        else:
+            return jsonify({"error": "Parameter not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# ----------------- TODO DELETE parameter value parameter_id--------------
+@parameter_bp.route('/delete_value/<int:id>', methods=['DELETE'])
+def delete_parameter_value(id):
+    try:
+        mysql = current_app.mysql
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM parameter_value WHERE id = %s", (id,))
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"error": "Parameter not found"}), 404
+
+        cur.execute("DELETE FROM parameter_value WHERE id = %s", (id,))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Parameter deleted successfully","status":200}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# ----------------TODO UPDATE parameter value -----------------------
+@parameter_bp.route('/value_update/<int:id>', methods=['PUT'])
+def update_parameter_value(id):
+    try:
+        data = request.get_json()
+
+        value = data.get("value")
+        
+
+        mysql = current_app.mysql
+        cur = mysql.connection.cursor()
+
+        #  Check if parameter exists
+        cur.execute("SELECT id FROM parameter_value WHERE id = %s", (id,))
+        if not cur.fetchone():
+            return jsonify({"error": f"Parameter with ID {id} not found"}), 404
+
+        #  Update query
+        update_query = """
+            UPDATE parameter_value 
+            SET value=%s
+            WHERE id=%s
+        """
+        cur.execute(update_query, (
+            value,id,
+        ))
+
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Parameter value updated successfully", "status": 200}), 200
+
+    except Exception as e:
+        mysql = current_app.mysql
+        mysql.connection.rollback()   
+        return jsonify({"error": str(e)}), 500
