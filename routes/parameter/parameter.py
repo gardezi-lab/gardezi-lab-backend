@@ -305,7 +305,7 @@ def search_parameter(parameter_name):
 
 
 # ----------------------TODO parameters value ----------------
-@parameter_bp.route('/add_value', methods=['POST'])
+@parameter_bp.route('/dropdown_value', methods=['POST'])
 def add_value():
     
     data = request.get_json()
@@ -327,27 +327,31 @@ def add_value():
     cursor.close()
     return jsonify({"message": 'value is added sucessfuly', "status": 201})
 # -------------------TODO GET value by parameter-id --------------------
-@parameter_bp.route('/get_value/<int:parameter_id>', methods=['GET'])
+@parameter_bp.route('/dropdown_value/<int:parameter_id>', methods=['GET'])
 def get_parameter_value(parameter_id):
     try:
-        cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM parameter_value WHERE parameter_id = %s", (parameter_id,))
-        parameter = cur.fetchone()
+        cur = mysql.connection.cursor(DictCursor)
+        cur.execute("SELECT id, parameter_id, value, created_at FROM parameter_value WHERE parameter_id = %s", (parameter_id,))
+        rows = cur.fetchall()
         cur.close()
-        if parameter:
-            return jsonify({
-                "id": parameter[0],
-                "parameter_id": parameter[1],
-                "created_at": parameter[2],
-                "value": parameter[3],
-                "status" : 200
-            }), 200
-        else:
-            return jsonify({"error": "Parameter not found"}), 404
+
+        dropdown_values = []
+        for r in rows:
+            r_copy = dict(r)
+            r_copy.pop('parameter_id', None)
+            dropdown_values.append(r_copy)
+
+        return jsonify({
+            "parameter_id": rows[0]['parameter_id'],
+            "dropdown_values": dropdown_values,
+            "status": 200
+        }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
+
+    
 # ----------------- TODO DELETE parameter value parameter_id--------------
-@parameter_bp.route('/delete_value/<int:id>', methods=['DELETE'])
+@parameter_bp.route('/dropdown_value/<int:id>', methods=['DELETE'])
 def delete_parameter_value(id):
     try:
         mysql = current_app.mysql
