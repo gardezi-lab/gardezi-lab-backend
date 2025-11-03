@@ -335,6 +335,14 @@ def get_parameter_value(parameter_id):
         rows = cur.fetchall()
         cur.close()
 
+        # If no records found
+        if not rows:
+            return jsonify({
+                "parameter_id": parameter_id,
+                "dropdown_values": [],
+                "status": 200
+            }), 200
+        
         dropdown_values = []
         for r in rows:
             r_copy = dict(r)
@@ -346,10 +354,10 @@ def get_parameter_value(parameter_id):
             "dropdown_values": dropdown_values,
             "status": 200
         }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)})
 
-    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ----------------- TODO DELETE parameter value parameter_id--------------
 @parameter_bp.route('/dropdown_value/<int:id>', methods=['DELETE'])
 def delete_parameter_value(id):
