@@ -88,7 +88,7 @@ def create_department():
         if isinstance(department_name, int):
             return jsonify({"error": "Department name cannot be a number"}), 400
 
-        cursor.execute("INSERT INTO departments (department) VALUES (%s)", (department_name,))
+        cursor.execute("INSERT INTO departments (department_name) VALUES (%s)", (department_name,))
         mysql.connection.commit() # type: ignore
         cursor.close()
         return jsonify({"message": "Department created successfully",
