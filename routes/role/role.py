@@ -178,3 +178,49 @@ def search_role(role_name):
         return jsonify({"error": str(e)}), 500
 #===========================================================#
 
+# ---------------------- UPDATE ROLE PERMISSIONS (ADMIN ONLY) ---------------------- 
+@role_bp.route('/update_permission/<int:id>', methods=['PUT'])
+def update_role_permissions(id):
+    data = request.get_json()
+    module_name = data.get('module')
+    
+    reception_val = data.get('reception') 
+    admin_val = data.get('admin')
+    tech_val = data.get('tech')
+
+    # Data validation here (optional but recommended)
+
+    cursor = current_app.mysql.connection.cursor() # DictCursor ki zaroorat nahi update mein
+    try:
+        update_query = """
+            UPDATE role_management 
+            SET module = %s, reception = %s, admin = %s, tech = %s 
+            WHERE id = %s
+        """
+        
+        # Tarteeb ka khayal rakhein: (module_name, reception_val, admin_val, tech_val, id)
+        cursor.execute(update_query, (module_name, reception_val, admin_val, tech_val, id,))
+        
+        if cursor.rowcount == 0:
+            return jsonify({"message": f"Role ID {id} not found."}), 404
+
+        current_app.mysql.connection.commit()
+        
+    except Exception as e:
+        current_app.mysql.connection.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+
+    return jsonify({"message": "update successfuly..", "id": id})
+
+
+# ---------------------- GET ALL PERMISSIONS (ADMIN ONLY) ---------------------- #
+@role_bp.route('/role_get', methods=['GET'])
+def get_all_permissions():
+    cursor = current_app.mysql.connection.cursor(DictCursor)
+    cursor.execute("SELECT * FROM role_management")
+    data = cursor.fetchall()
+    cursor.close()
+    return jsonify(data), 200
+
