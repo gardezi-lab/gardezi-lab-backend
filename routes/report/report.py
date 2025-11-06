@@ -23,7 +23,7 @@ def generate_report(id):
             return jsonify({"status": 404, "message": "Counter not found"}), 404
         
         
-
+        
         patient_id = result['pt_id']
         reff_by = result['reff_by']
         remarks = result['remarks']
@@ -56,11 +56,10 @@ def generate_report(id):
             WHERE id = %s
         """, (patient_id,))
         patient = cursor.fetchone()
-        
 
         if not patient:
             return jsonify({"status": 404, "message": "Patient not found"}), 404
-
+        
         data = request.get_json()
         tests = data.get("test", [])
         history_limit = data.get("history_limit")  # Optional parameter
@@ -89,6 +88,7 @@ def generate_report(id):
         
         
         
+        
 
         total_fee = 0
         test_list = []
@@ -101,17 +101,21 @@ def generate_report(id):
             patient_test_id = test['patient_test_id']
             fee = int(test.get('fee') or 0)
             total_fee += fee
+            
             #first ham check kr rhe hen k es test me koi interpertation add he. agar add he to uski id
             cursor.execute("SELECT name, qualification FROM users WHERE id = %s", (verified_by_id,)) 
             resulttest = cursor.fetchone()
             verified_by_name = resulttest['name']
+            print("finding line error 1021s")
             verified_by_qualification = resulttest['qualification']
             cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
             resulttest = cursor.fetchone()
             intprid = resulttest['interpretation']
+            
             cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
             resulttest = cursor.fetchone()
             detaildetail = resulttest['detail']
+
             cursor.execute("SELECT comment FROM patient_tests WHERE test_id = %s AND counter_id= %s", (test_id, id,)) 
             comresult = cursor.fetchone()
             commentcomment = comresult['comment']
@@ -122,6 +126,7 @@ def generate_report(id):
             cursor.execute("SELECT department_name FROM departments WHERE id = %s ", (departtest,))
             result = cursor.fetchone()
             department_name = result['department_name']
+            
             
             
             
