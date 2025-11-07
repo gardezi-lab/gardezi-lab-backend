@@ -12,6 +12,7 @@ def get_all_permissions():
 
         cursor.execute("""
             SELECT 
+                id,
                 userid, 
                 modulename, 
                 view, 
@@ -31,6 +32,7 @@ def get_all_permissions():
                 result[uid] = []
             result[uid].append({
                 "modulename": row['modulename'],
+                "moduleid": row['id'],
                 "crud": {
                     "view": row['view'],
                     "add": row['add'],
