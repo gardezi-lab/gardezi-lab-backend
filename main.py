@@ -21,6 +21,7 @@ from routes.addresults.addresults import results_bp
 from routes.cash.cash import cash_bp
 from routes.report.report import report_bp
 from routes.account_book.account import account_bp
+from routes.user_module_permissions.user_module_permissions import permission_bp
 
 
 # Load .env variables
@@ -97,6 +98,7 @@ app.register_blueprint(results_bp)
 app.register_blueprint(cash_bp) 
 app.register_blueprint(report_bp)
 app.register_blueprint(authentication_bp)
+app.register_blueprint(permission_bp)
 #main
 
 app.register_blueprint(account_bp)
