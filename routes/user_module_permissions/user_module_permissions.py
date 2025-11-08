@@ -40,8 +40,8 @@ def get_all_permissions():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # ---------------- UPDATE PERMISSIONS BY USERID ---------------- #
-@permission_bp.route('/<int:userid>', methods=['PUT'])
-def update_permissions(userid):
+@permission_bp.route('/', methods=['PUT'])
+def update_permissions():
     try:
         conn = current_app.mysql.connection
         cursor = conn.cursor()
@@ -54,7 +54,7 @@ def update_permissions(userid):
 
         # Loop through each module and update its CRUD values
         for module in modules:
-            modulename = module.get("modulename")
+            moduleid = module.get("moduleid")  
             crud = module.get("crud", {})
 
             reception = crud.get("reception", 0)
@@ -65,18 +65,18 @@ def update_permissions(userid):
             patient = crud.get("patient", 0)
             accountant = crud.get("accountant", 0)
 
-            # Update query based on modulename and userid
             cursor.execute("""
                 UPDATE user_module_permissions 
                 SET reception=%s, technician=%s, pathologist=%s, manager=%s, 
                     doctor=%s, patient=%s, accountant=%s
-                WHERE modulename=%s
-            """, (reception, technician, pathologist, manager, doctor, patient, accountant, modulename))
+                WHERE id=%s   
+            """, (reception, technician, pathologist, manager, doctor, patient, accountant, moduleid))
+
 
         conn.commit()
         cursor.close()
 
-        return jsonify({"message": f"Permissions updated successfully for userid {userid}"}), 200
+        return jsonify({"message": "Permissions updated successfully.............."}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
