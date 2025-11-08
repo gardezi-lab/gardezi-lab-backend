@@ -76,7 +76,8 @@ def update_permissions():
         conn.commit()
         cursor.close()
 
-        return jsonify({"message": "Permissions updated successfully.............."}), 200
+        return jsonify({"message": "Permissions updated successfully..............",
+                        "status": 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
