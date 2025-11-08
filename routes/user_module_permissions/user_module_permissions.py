@@ -31,8 +31,11 @@ def get_all_permissions():
                     "accountant": row["accountant"]
                 }
             })
+            
 
-        return jsonify(result), 200
+        return jsonify({
+            "module":result,
+            "status": 200}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
