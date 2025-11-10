@@ -56,6 +56,29 @@ def get_all_test_profiles():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+#----------------------GET all test without pagination-------------------
+@test_profile_bp.route('/get_test/', methods=['GET'])
+def get_all_test_profile():
+    try:
+        mysql = current_app.mysql
+        cur = mysql.connection.cursor(DictCursor)
+
+        # base query
+        base_query = "SELECT * FROM test_profiles"
+        
+        cur.execute(base_query)
+        test_profiles = cur.fetchall()
+
+        
+
+        return jsonify({
+            "data": test_profiles,
+            
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # --------------------- Get test profile by ID --------------------- #

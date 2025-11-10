@@ -501,7 +501,7 @@ def add_or_update_result(id):
                             WHERE test_id = %s AND counter_id = %s
                         """, (comment, test_profile_id, id))
         
-                       #agar all verified ho gae hen to then counter ka status change kr do.
+                        #agar all verified ho gae hen to then counter ka status change kr do.
         cursor.execute("SELECT COUNT(*) AS total FROM patient_tests WHERE result_status=0 AND counter_id = %s", (id,))
         count = cursor.fetchone()['total']
         if count == 0:
