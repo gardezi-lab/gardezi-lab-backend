@@ -237,7 +237,7 @@ def get_doctors_only():
 def get_user_profile(id):
     try:
         cursor = mysql.connection.cursor(DictCursor)
-        get_query = "SELECT contact_no, user_name, age, name, email, qualification,profile_pic_path  FROM users WHERE id = %s"
+        get_query = "SELECT contact_no, user_name, age, name, email, qualification,profile_pic_path, password  FROM users WHERE id = %s"
         cursor.execute(get_query,(id,))
         data = cursor.fetchone()
         return jsonify({"data": data, "status": 200})
@@ -293,3 +293,23 @@ def update_user_profile(id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#-------------------- password update ------------
+@users_bp.route('/update_password/<int:id>', methods=['PUT'])
+def update_password(id):
+    try:
+        data = request.get_json()
+        password  = data.get('password')
+        
+        conn = mysql.connection
+        cursor = conn.cursor()
+        update_query = """
+            UPDATE users 
+            SET password = %s 
+            WHERE id = %s"""
+        cursor.execute(update_query,(password,id,))
+        conn.commit()
+        return jsonify({"message": "password is update succesfuly"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+    
+            
