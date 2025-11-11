@@ -1,6 +1,7 @@
 import math
 from flask import Blueprint, request, jsonify, current_app
-import MySQLdb.cursors
+from MySQLdb.cursors import DictCursor
+
 
 # Blueprint with API prefix
 interpretation_bp = Blueprint("interpretations", __name__, url_prefix="/api/interpretations")
@@ -9,8 +10,6 @@ interpretation_bp = Blueprint("interpretations", __name__, url_prefix="/api/inte
 def validate_interpretation_data(data, is_update=False):
     errors = []
     if not is_update:
-        if not data.get("type"):
-            errors.append("type is required")
         if not data.get("code"):
             errors.append("code is required")
         if not data.get("heading"):
@@ -31,8 +30,8 @@ def create_interpretation():
 
         cur = mysql.connection.cursor()
         cur.execute(
-            "INSERT INTO interpretations (type, code, heading, detail) VALUES (%s, %s, %s, %s)",
-            (data["type"], data["code"], data["heading"], data.get("detail")),
+            "INSERT INTO interpretations (code, heading, detail) VALUES (%s, %s, %s)",
+            (data["code"], data["heading"], data.get("detail")),
         )
         mysql.connection.commit()
         cur.close()
@@ -49,7 +48,6 @@ def get_interpretations():
         mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor) 
        
-
         # Query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
@@ -64,8 +62,8 @@ def get_interpretations():
 
         # Search condition
         if search:
-            where_clauses.append("(type LIKE %s OR code LIKE %s OR heading LIKE %s OR detail LIKE %s)")
-            values.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+            where_clauses.append("(code LIKE %s OR heading LIKE %s OR detail LIKE %s)")
+            values.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
@@ -122,8 +120,8 @@ def update_interpretation(id):
 
         cur = mysql.connection.cursor()
         cur.execute(
-            "UPDATE interpretations SET type=%s, code=%s, heading=%s, detail=%s WHERE id=%s",
-            (data.get("type"), data.get("code"), data.get("heading"), data.get("detail"), id),
+            "UPDATE interpretations SET code=%s, heading=%s, detail=%s WHERE id=%s",
+            (data.get("code"), data.get("heading"), data.get("detail"), id),
         )
         mysql.connection.commit()
 

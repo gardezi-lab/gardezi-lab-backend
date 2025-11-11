@@ -3,6 +3,8 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
 from MySQLdb.cursors import DictCursor
 import MySQLdb
+import os
+from datetime import datetime
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 mysql = MySQL()
@@ -226,6 +228,67 @@ def get_doctors_only():
         return jsonify({
             "data": doctors,
             "count": len(doctors)
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+#------------------User profile ----------------
+@users_bp.route('/user_profile/<int:id>', methods=['GET'])
+def get_user_profile(id):
+    try:
+        cursor = mysql.connection.cursor(DictCursor)
+        get_query = "SELECT contact_no, user_name, age, name, email, qualification,profile_pic_path  FROM users WHERE id = %s"
+        cursor.execute(get_query,(id,))
+        data = cursor.fetchone()
+        return jsonify({"data": data, "status": 200})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+#----------------------update_user profile---------------
+UPLOAD_FOLDER = 'static/profile_pictures'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@users_bp.route('/user_profile/<int:id>', methods=['PUT'])
+def update_user_profile(id):
+    try:
+        name = request.form.get("name")
+        contact_no = request.form.get("contact_no")
+        user_name = request.form.get("user_name")
+        age = request.form.get("age")
+        email = request.form.get("email")
+        qualification = request.form.get("qualification")
+        
+        
+        profile_pic = request.files.get("profile_pic")
+
+        
+        image_path = None
+        if profile_pic:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            image_filename = f"user_{id}_{timestamp}.jpg"
+            image_path = os.path.join(UPLOAD_FOLDER, image_filename)
+            profile_pic.save(image_path)
+
+        # Database operations
+        conn = current_app.mysql.connection
+        cursor = conn.cursor()
+
+        # Check if user exists
+        cursor.execute("SELECT * FROM users WHERE id = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "User not found"}), 404
+
+        # Update user info
+        cursor.execute("""
+            UPDATE users
+            SET name=%s, contact_no=%s, user_name=%s, age=%s, email=%s, qualification=%s,profile_pic_path=%s
+            WHERE id=%s
+        """, (name, contact_no, user_name, age, email, qualification, image_path,id))
+        conn.commit()
+
+        return jsonify({
+            "message": "User updated successfully",
+            "profile_pic_path": image_path,
+            "status": 200
         }), 200
 
     except Exception as e:
