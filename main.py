@@ -23,6 +23,19 @@ from routes.report.report import report_bp
 from routes.account_book.account import account_bp
 from routes.user_module_permissions.user_module_permissions import permission_bp
 
+# Account book related blueprints
+from routes.account_book.account import account_bp
+from routes.account_book.bank_payment.bank_payment import bank_payment_bp
+from routes.account_book.bank_receipt_voucher.bank_receipt_voucher import bank_receipt_voucher_bp
+from routes.account_book.cash_payment_voucher.cash_payment_voucher import cash_payment_bp
+from routes.account_book.journal_voucher.journal_voucher import voucher_bp
+from routes.account_book.cash_receipt_voucher.cash_receipt_voucher import cash_receipt_bp
+from routes.account_book.account_setting.account_settings import account_settings_bp
+from routes.account_book.liabilities.liabilities import liabilities_bp
+from routes.account_book.stock_items.stock_items import stock_items_bp
+from routes.account_book.stock_purchcese.stock_purchcese import stock_purchase_bp
+from routes.account_book.stock_usage.stock_usage import stock_usage_bp
+from routes.account_book.inventory.inventory import inventory_bp
 
 # Load .env variables
 load_dotenv()
@@ -101,7 +114,19 @@ app.register_blueprint(authentication_bp)
 app.register_blueprint(permission_bp)
 #main
 
+# ---------- Account Book Blueprints ----------
 app.register_blueprint(account_bp)
+app.register_blueprint(voucher_bp)
+app.register_blueprint(bank_payment_bp)
+app.register_blueprint(bank_receipt_voucher_bp) 
+app.register_blueprint(cash_payment_bp)
+app.register_blueprint(cash_receipt_bp)
+app.register_blueprint(account_settings_bp)
+app.register_blueprint(liabilities_bp)
+app.register_blueprint(stock_items_bp)
+app.register_blueprint(stock_purchase_bp)
+app.register_blueprint(stock_usage_bp)
+app.register_blueprint(inventory_bp)
 
 # ---------- Run App ----------
 if __name__ == "__main__":

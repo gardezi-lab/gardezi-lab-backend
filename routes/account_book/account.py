@@ -78,7 +78,6 @@ def create_accounthead():
         data = request.get_json(force=False)
         if not data:
             return jsonify({"error": "Invalid or missing JSON body"}), 400
-
         name_head = data.get('name_head')
         head_code = data.get('head_code')
         ob = data.get('ob')
@@ -89,16 +88,16 @@ def create_accounthead():
             return jsonify({"error": "Head name cannot be empty"}), 400
         # Check for duplicate department
         cursor = mysql.connection.cursor() # type: ignore
-        cursor.execute("SELECT * FROM account_heads WHERE name_head=%s", (head,))
+        cursor.execute("SELECT * FROM account_heads WHERE name_head=%s", (name_head,))
         existing_department = cursor.fetchone()
         # Check if department is empty
         if existing_department:
             return jsonify({"error": "Head Name already exists"}), 400
         #check if department is a number
-        if isinstance(head, int):
+        if isinstance(name_head, int):
             return jsonify({"error": "Head Name name cannot be a number"}), 400
         
-        cursor.execute("INSERT INTO account_heads (name_head, head_code, ob, ob_date, parent_account) VALUES (%s, %s, %s, %s, %s)", (head, head_code, ob, ob_date, parent_account,))
+        cursor.execute("INSERT INTO account_heads (name_head, head_code, ob, ob_date, parent_account) VALUES (%s, %s, %s, %s, %s)", (name_head, head_code, ob, ob_date, parent_account))
         mysql.connection.commit() # type: ignore
         cursor.close()
 
@@ -217,3 +216,6 @@ def get_account_head_by_id(id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+    
