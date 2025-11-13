@@ -111,11 +111,11 @@ def generate_report(id):
             cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
             resulttest = cursor.fetchone()
             intprid = resulttest['interpretation']
+            if intprid:
+                cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
+                resulttest = cursor.fetchone()
+                detaildetail = resulttest['detail']
             
-            cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
-            resulttest = cursor.fetchone()
-            detaildetail = resulttest['detail']
-
             cursor.execute("SELECT comment FROM patient_tests WHERE test_id = %s AND counter_id= %s", (test_id, id,)) 
             comresult = cursor.fetchone()
             commentcomment = comresult['comment']
