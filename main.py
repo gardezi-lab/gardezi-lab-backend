@@ -20,6 +20,7 @@ from routes.invoice.invoice import invoice_bp
 from routes.addresults.addresults import results_bp
 from routes.cash.cash import cash_bp
 from routes.report.report import report_bp
+from routes.pdfreport.pdfreport import pdfreport_bp
 from routes.account_book.account import account_bp
 from routes.user_module_permissions.user_module_permissions import permission_bp
 
@@ -110,6 +111,7 @@ app.register_blueprint(invoice_bp)
 app.register_blueprint(results_bp)
 app.register_blueprint(cash_bp) 
 app.register_blueprint(report_bp)
+app.register_blueprint(pdfreport_bp)
 app.register_blueprint(authentication_bp)
 app.register_blueprint(permission_bp)
 #main
