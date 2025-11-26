@@ -1,5 +1,5 @@
 # pdfreport.py
-from flask import Blueprint, request, url_for, current_app, jsonify, send_file
+from flask import Blueprint, request, url_for, jsonify, send_file, current_app
 from flask_mysqldb import MySQL
 import qrcode
 from io import BytesIO
@@ -9,6 +9,10 @@ from xhtml2pdf import pisa
 import os
 import base64
 import traceback
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
 
 pdfreport_bp = Blueprint('pdfreport', __name__, url_prefix='/api/pdfreport')
 mysql = MySQL()
@@ -17,81 +21,118 @@ os.makedirs(PDF_FOLDER, exist_ok=True)
 
 
 def build_parameters(cursor, patient_id, counter_id, test_id):
+    """
+    Build parameter data: one result per parameter per date from patient_results
+    """
     cursor.execute("""
-        SELECT c.date_created AS test_datetime, p.parameter_name, p.unit, p.normalvalue, pr.result_value, pr.cutoff_value, p.sub_heading
-        FROM parameters p
-        JOIN patient_tests pt ON p.test_profile_id = pt.test_id AND pt.patient_id=%s AND pt.counter_id <= %s
-        JOIN patient_results pr ON pr.parameter_id = p.id AND pr.counter_id = pt.counter_id
-        JOIN counter c ON pt.counter_id = c.id
-        WHERE pt.test_id=%s
-        ORDER BY c.date_created ASC
+        SELECT pr.created_at AS result_date, p.parameter_name, p.unit, p.normalvalue,
+               pr.result_value, pr.cutoff_value, p.sub_heading
+        FROM patient_results pr
+        JOIN parameters p ON pr.parameter_id = p.id
+        JOIN patient_tests pt ON pt.patient_id=%s AND pt.counter_id <= %s AND pt.test_id=%s
+            AND pt.test_id = p.test_profile_id
+        WHERE pr.counter_id = pt.counter_id
+        ORDER BY pr.created_at ASC
     """, (patient_id, counter_id, test_id))
-    
+
     rows = cursor.fetchall() or []
-    dates = sorted(list({str(r['test_datetime']) for r in rows}))
-    
+
+    # unique dates from patient_results
+    dates = sorted(list({str(r['result_date'])[:10] for r in rows}))
+
     params_map = {}
     for r in rows:
         pname = r['parameter_name']
+        date_key = str(r['result_date'])[:10]  # just date part
         if pname not in params_map:
             params_map[pname] = {
                 "unit": r.get('unit'),
                 "normalvalue": r.get('normalvalue'),
                 "sub_heading": r.get('sub_heading'),
-                "results": {},
+                "results": {},   # key: date -> result
                 "cutoffs": {}
             }
-        params_map[pname]["results"][str(r['test_datetime'])] = r.get('result_value')
-        params_map[pname]["cutoffs"][str(r['test_datetime'])] = r.get('cutoff_value')
+        # overwrite if multiple results: latest will be kept
+        params_map[pname]["results"][date_key] = r.get('result_value', '-')
+        params_map[pname]["cutoffs"][date_key] = r.get('cutoff_value', '-')
 
     parameters = []
     for pname, pdata in params_map.items():
-        results = [pdata["results"].get(d, "-") for d in dates]
+        results_list = [pdata["results"].get(d, "-") for d in dates]
         cutoffs = [pdata["cutoffs"].get(d, "-") for d in dates]
         parameters.append({
             "parameter_name": pname,
             "unit": pdata.get("unit"),
             "normalvalue": pdata.get("normalvalue"),
             "sub_heading": pdata.get("sub_heading"),
-            "result_value": results,
+            "result_value": results_list,
             "cutoff_value": cutoffs
         })
+
     return dates, parameters
+
+def generate_graph_image(dates, values, parameter_name):
+    """
+    Generate graph showing results over dates as a line plot.
+    """
+    y = []
+    for v in values:
+        try:
+            y.append(float(v))  # single value per date
+        except:
+            y.append(np.nan)
+
+    x_labels = [str(d) for d in dates]
+    x = list(range(len(x_labels)))
+
+    fig, ax = plt.subplots(figsize=(4,1.5), dpi=100)
+    ax.plot(x, y, marker='o', linewidth=1, markersize=3, color='blue')
+    ax.set_xticks(x)
+    ax.set_xticklabels(x_labels, fontsize=6)
+    ax.tick_params(axis='y', labelsize=7)
+    ax.grid(axis='y', linestyle=':', linewidth=0.5)
+    plt.tight_layout(pad=0.2)
+
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.05)
+    plt.close(fig)
+    return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 
 def render_parameters_html(test):
+    """
+    Render table with Dates as columns, one result per date, plus graph
+    """
     params = test.get('parameters', [])
     if not params:
         return "<p>No parameters available</p>"
-    
+
     dates = test.get('dates', [])
-    html = "<table border='1' cellspacing='0' cellpadding='4'><tr><th>Parameter</th>"
+    html = "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse; width:100%;'>"
+    html += "<tr><th>Parameter</th>"
     for d in dates:
         html += f"<th>{d}</th>"
-    html += "</tr>"
-    
-    for p in params:
-        html += f"<tr><td>{p['parameter_name']}"
-        if p.get('unit'):
-            html += f"<br>Unit: {p['unit']}"
-        if p.get('normalvalue'):
-            html += f"<br>Normal: {p['normalvalue']}"
-        html += "</td>"
-        for val in p.get('result_value', []):
-            html += f"<td>{val}</td>"
-        html += "</tr>"
-    
-    html += "</table>"
-    return html
+    html += "<th>Graph</th></tr>"
 
+    for p in params:
+        html += f"<tr><td>{p['parameter_name']}</td>"
+        for val in p.get('result_value', []):
+            html += f"<td style='text-align:center'>{val}</td>"
+        graph_img = generate_graph_image(dates, p.get('result_value', []), p['parameter_name'])
+        if graph_img:
+            html += f"<td><img src='{graph_img}' style='width:240px; height:140px; display:block; margin:auto; object-fit:contain;'></td>"
+        else:
+            html += "<td>-</td>"
+        html += "</tr>"
+    html += "</table><br>"
+    return html
 
 @pdfreport_bp.route('/<int:id>', methods=['POST'])
 def generate_pdf_report(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Counter
-        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount FROM counter WHERE id=%s", (id,))
+        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount, date_created FROM counter WHERE id=%s", (id,))
         counter = cursor.fetchone()
         if not counter:
             return jsonify({"status":404,"message":"Counter not found"}),404
@@ -99,25 +140,20 @@ def generate_pdf_report(id):
         patient_id = counter['pt_id']
         remarks = counter.get('remarks') or "-"
         sample = counter.get('sample') or "-"
-        total_fee_db = counter.get('total_fee') or 0
-        paid_db = counter.get('paid') or 0
-        discount_db = counter.get('discount') or 0
 
-        # Patient
-        cursor.execute("SELECT id, patient_name, cell, gender, age, MR_number, mr_number FROM patient_entry WHERE id=%s", (patient_id,))
+        cursor.execute("SELECT id, patient_name, cell, gender, age, father_hasband_MR, mr_number, address FROM patient_entry WHERE id=%s", (patient_id,))
         patient = cursor.fetchone()
         if not patient:
             return jsonify({"status":404,"message":"Patient not found"}),404
         mr_number = patient.get('MR_number') or patient.get('mr_number') or ""
 
-        # Referred by
         reff_by_name = "N/A"
         if counter.get('reff_by'):
             cursor.execute("SELECT name FROM users WHERE id=%s", (counter['reff_by'],))
             r = cursor.fetchone()
-            if r: reff_by_name = r.get('name') or "N/A"
+            if r:
+                reff_by_name = r.get('name') or "N/A"
 
-        # Tests
         data = request.get_json() or {}
         tests_input = data.get("test", [])
         test_ids = [t.get("id") for t in tests_input if t.get("id")]
@@ -141,9 +177,7 @@ def generate_pdf_report(id):
         tests = cursor.fetchall() or []
         test_list = []
         for t in tests:
-            # verified info
-            verified_name = "N/A"
-            verified_qual = ""
+            verified_name, verified_qual = "N/A", ""
             if t.get('verified_by'):
                 cursor.execute("SELECT name, qualification FROM users WHERE id=%s", (t['verified_by'],))
                 v = cursor.fetchone()
@@ -151,26 +185,22 @@ def generate_pdf_report(id):
                     verified_name = v.get('name') or "N/A"
                     verified_qual = v.get('qualification') or ""
 
-            # interpretation
             interp_detail = None
             if t.get('interpretation'):
                 cursor.execute("SELECT detail FROM interpretations WHERE id=%s", (t['interpretation'],))
                 idetail = cursor.fetchone()
                 if idetail: interp_detail = idetail.get('detail')
 
-            # comment
             cursor.execute("SELECT comment FROM patient_tests WHERE test_id=%s AND counter_id=%s", (t['test_id'], id))
             com = cursor.fetchone()
             commenttext = com.get('comment') if com else None
 
-            # department
             dept_name = "N/A"
             if t.get('department_id'):
                 cursor.execute("SELECT department_name FROM departments WHERE id=%s", (t['department_id'],))
                 drow = cursor.fetchone()
                 if drow: dept_name = drow.get('department_name') or dept_name
 
-            # parameters
             dates, parameters = build_parameters(cursor, patient_id, id, t['test_id'])
             test_list.append({
                 "test_name": t.get('test_name'),
@@ -183,26 +213,60 @@ def generate_pdf_report(id):
                 "test_verify_info": [{"name": verified_name, "qualification": verified_qual, "verified_at": str(t.get('verified_at'))}]
             })
 
-        # QR code
         qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         qr_img = qrcode.make(qr_text)
         buf = BytesIO()
         qr_img.save(buf, format='PNG')
         qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
-        # Build simple HTML
-        html = f"<html><body><h2>Lab Report</h2><img src='{qr_data_url}' width='80'/><br>"
-        html += f"<b>Patient Name:</b> {patient['patient_name']}<br>"
-        html += f"<b>MR Number:</b> {mr_number}<br>"
-        html += f"<b>Cell:</b> {patient['cell']}<br>"
-        html += f"<b>Gender:</b> {patient['gender']}<br>"
-        html += f"<b>Age:</b> {patient['age']}<br>"
-        html += f"<b>Referred By:</b> {reff_by_name}<br>"
-        html += f"<b>Sample:</b> {sample}<br>"
-        html += f"<b>Remarks:</b> {remarks}<br><hr>"
+        html = f"""
+<html>
+<body style="font-family: Arial; font-size: 13px; color: #000;">
+<table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
+<tr>
+    <td style="width:50%; text-align:left;">
+        <img src='./static/gardezi_logo.jpg' alt='Logo' style='width:80px;'>
+    </td>
+    <td style="width:50%; text-align:right;">
+        <img src='{qr_data_url}' alt='QR Code' style='width:80px;'>
+    </td>
+</tr>
+</table>
+<table style="width:100%; border-collapse: collapse; margin-bottom:20px;">
+<tr>
+    <td style="vertical-align: top; width:50%;">
+        <table style="width:100%;">
+            <tr><td style='font-weight:bold; width:150px;'>Name:</td><td>{patient['patient_name']}</td></tr>
+            <tr><td style='font-weight:bold;'>Gender:</td><td>{patient['gender']}</td></tr>
+            <tr><td style='font-weight:bold;'>MR No:</td><td>{mr_number}</td></tr>
+            <tr><td style='font-weight:bold;'>Phone:</td><td>{patient.get('cell', '')}</td></tr>
+            <tr><td style='font-weight:bold;'>Address:</td><td>{patient.get('address', 'N/A')}</td></tr>
+        </table>
+    </td>
+    <td style="vertical-align: top; width:50%;">
+        <table style="width:100%;">
+            <tr><td style='font-weight:bold; width:180px;'>Father/Husband:</td><td>{patient.get('father_hasband_MR','')}</td></tr>
+            <tr><td style='font-weight:bold;'>Registration Date:</td><td>{counter.get('date_created','')}</td></tr>
+            <tr><td style='font-weight:bold;'>Date:</td><td>{datetime.now().strftime('%Y-%m-%d')}</td></tr>
+            <tr><td style='font-weight:bold;'>Sample Taken In Lab:</td><td>{sample}</td></tr>
+            <tr><td style='font-weight:bold;'>Remarks:</td><td>{remarks}</td></tr>
+        </table>
+    </td>
+</tr>
+</table>
+"""
 
         for t in test_list:
-            html += f"<h3>{t['department']} - {t['test_name']}</h3>"
+            html += f"""
+<div style="margin-top:10px; margin-bottom:10px;display:flex;  justify-content:space-between;">
+    <p style="font-weight:bold; text-align:center; border:0.5px solid black; padding-top:3px; font-size:16px;">
+        {t['department']}
+    </p>
+</div>
+<div>
+    <p>{t['test_name']}</p>
+</div>
+"""
             html += render_parameters_html(t)
             if t.get('comment'):
                 html += f"<b>Comment:</b> {t['comment']}<br>"
@@ -211,10 +275,15 @@ def generate_pdf_report(id):
             vinfo = t.get('test_verify_info', [{}])[0]
             html += f"<b>Verified By:</b> {vinfo.get('name','')} | <b>Qualification:</b> {vinfo.get('qualification','')} | <b>Verified At:</b> {vinfo.get('verified_at','')}<br><hr>"
 
-        unpaid = total_fee_db - paid_db - discount_db
-        html += f"<b>Total Fee:</b> {total_fee_db} | <b>Paid:</b> {paid_db} | <b>Discount:</b> {discount_db} | <b>Unpaid:</b> {unpaid}</body></html>"
+            footer_path = os.path.join(current_app.root_path, "static", "report_footer.jpeg")
+            with open(footer_path, "rb") as f:
+                footer_data = base64.b64encode(f.read()).decode()
+            html += f"""
+<p style='text-align:center;'>
+<img src="data:image/jpeg;base64,{footer_data}" style="width:100%; height:110px;">
+</p>
+"""
 
-        # Save PDF
         pdf_filename = f"report_{patient_id}_{int(datetime.now().timestamp())}.pdf"
         pdf_path = os.path.join(PDF_FOLDER, pdf_filename)
         with open(pdf_path, 'wb') as f:
