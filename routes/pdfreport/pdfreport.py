@@ -1,5 +1,5 @@
 # pdfreport.py
-from flask import Blueprint, request, url_for, current_app, jsonify, send_file
+from flask import Blueprint, request, url_for, jsonify, send_file, current_app
 from flask_mysqldb import MySQL
 import qrcode
 from io import BytesIO
@@ -81,7 +81,7 @@ def render_parameters_html(test):
             html += f"<td>{val}</td>"
         html += "</tr>"
     
-    html += "</table>"
+    html += "</table><br>"
     return html
 
 
@@ -91,7 +91,7 @@ def generate_pdf_report(id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         # Counter
-        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount FROM counter WHERE id=%s", (id,))
+        cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount, date_created FROM counter WHERE id=%s", (id,))
         counter = cursor.fetchone()
         if not counter:
             return jsonify({"status":404,"message":"Counter not found"}),404
@@ -104,7 +104,7 @@ def generate_pdf_report(id):
         discount_db = counter.get('discount') or 0
 
         # Patient
-        cursor.execute("SELECT id, patient_name, cell, gender, age, MR_number, mr_number FROM patient_entry WHERE id=%s", (patient_id,))
+        cursor.execute("SELECT id, patient_name, cell, gender, age, father_hasband_MR, mr_number, address FROM patient_entry WHERE id=%s", (patient_id,))
         patient = cursor.fetchone()
         if not patient:
             return jsonify({"status":404,"message":"Patient not found"}),404
@@ -115,7 +115,8 @@ def generate_pdf_report(id):
         if counter.get('reff_by'):
             cursor.execute("SELECT name FROM users WHERE id=%s", (counter['reff_by'],))
             r = cursor.fetchone()
-            if r: reff_by_name = r.get('name') or "N/A"
+            if r:
+                reff_by_name = r.get('name') or "N/A"
 
         # Tests
         data = request.get_json() or {}
@@ -141,9 +142,8 @@ def generate_pdf_report(id):
         tests = cursor.fetchall() or []
         test_list = []
         for t in tests:
-            # verified info
-            verified_name = "N/A"
-            verified_qual = ""
+            # Verified info
+            verified_name, verified_qual = "N/A", ""
             if t.get('verified_by'):
                 cursor.execute("SELECT name, qualification FROM users WHERE id=%s", (t['verified_by'],))
                 v = cursor.fetchone()
@@ -151,26 +151,26 @@ def generate_pdf_report(id):
                     verified_name = v.get('name') or "N/A"
                     verified_qual = v.get('qualification') or ""
 
-            # interpretation
+            # Interpretation
             interp_detail = None
             if t.get('interpretation'):
                 cursor.execute("SELECT detail FROM interpretations WHERE id=%s", (t['interpretation'],))
                 idetail = cursor.fetchone()
                 if idetail: interp_detail = idetail.get('detail')
 
-            # comment
+            # Comment
             cursor.execute("SELECT comment FROM patient_tests WHERE test_id=%s AND counter_id=%s", (t['test_id'], id))
             com = cursor.fetchone()
             commenttext = com.get('comment') if com else None
 
-            # department
+            # Department
             dept_name = "N/A"
             if t.get('department_id'):
                 cursor.execute("SELECT department_name FROM departments WHERE id=%s", (t['department_id'],))
                 drow = cursor.fetchone()
                 if drow: dept_name = drow.get('department_name') or dept_name
 
-            # parameters
+            # Parameters
             dates, parameters = build_parameters(cursor, patient_id, id, t['test_id'])
             test_list.append({
                 "test_name": t.get('test_name'),
@@ -190,19 +190,61 @@ def generate_pdf_report(id):
         qr_img.save(buf, format='PNG')
         qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
-        # Build simple HTML
-        html = f"<html><body><h2>Lab Report</h2><img src='{qr_data_url}' width='80'/><br>"
-        html += f"<b>Patient Name:</b> {patient['patient_name']}<br>"
-        html += f"<b>MR Number:</b> {mr_number}<br>"
-        html += f"<b>Cell:</b> {patient['cell']}<br>"
-        html += f"<b>Gender:</b> {patient['gender']}<br>"
-        html += f"<b>Age:</b> {patient['age']}<br>"
-        html += f"<b>Referred By:</b> {reff_by_name}<br>"
-        html += f"<b>Sample:</b> {sample}<br>"
-        html += f"<b>Remarks:</b> {remarks}<br><hr>"
+        # Build HTML
+        html = f"""
+<html>
+<body style="font-family: Arial; font-size: 13px; color: #000;">
 
+<!-- Header with Logo and QR -->
+<table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
+<tr>
+    <td style="width:50%; text-align:left;">
+        <img src='./static/gardezi_logo.jpg' alt='Logo' style='width:80px;'>
+    </td>
+    <td style="width:50%; text-align:right;">
+        <img src='{qr_data_url}' alt='QR Code' style='width:80px;'>
+    </td>
+</tr>
+</table>
+
+<!-- Patient Info -->
+<table style="width:100%; border-collapse: collapse; margin-bottom:20px;">
+<tr>
+    <td style="vertical-align: top; width:50%;">
+        <table style="width:100%;">
+            <tr><td style='font-weight:bold; width:150px;'>Name:</td><td>{patient['patient_name']}</td></tr>
+            <tr><td style='font-weight:bold;'>Gender:</td><td>{patient['gender']}</td></tr>
+            <tr><td style='font-weight:bold;'>MR No:</td><td>{mr_number}</td></tr>
+            <tr><td style='font-weight:bold;'>Phone:</td><td>{patient.get('cell', '')}</td></tr>
+            <tr><td style='font-weight:bold;'>Address:</td><td>{patient.get('address', 'N/A')}</td></tr>
+        </table>
+    </td>
+    <td style="vertical-align: top; width:50%;">
+        <table style="width:100%;">
+            <tr><td style='font-weight:bold; width:180px;'>Father/Husband:</td><td>{patient.get('father_hasband_MR','')}</td></tr>
+            <tr><td style='font-weight:bold;'>Registration Date:</td><td>{counter.get('date_created','')}</td></tr>
+            <tr><td style='font-weight:bold;'>Date:</td><td>{datetime.now().strftime('%Y-%m-%d')}</td></tr>
+            <tr><td style='font-weight:bold;'>Sample Taken In Lab:</td><td>{sample}</td></tr>
+            <tr><td style='font-weight:bold;'>Remarks:</td><td>{remarks}</td></tr>
+        </table>
+    </td>
+</tr>
+</table>
+<!-- <hr> -->
+"""
+
+        # Add tests info
         for t in test_list:
-            html += f"<h3>{t['department']} - {t['test_name']}</h3>"
+            html += f"""
+<div style="margin-top:10px; margin-bottom:10px;display:flex;  justify-content:space-between;">
+    <p style="font-weight:bold; text-align:center; border:0.5px solid black; padding-top:3px; font-size:16px;">
+        {dept_name}
+    </p>
+</div>
+<div>
+        <p>{t['test_name']} </p>
+    </div>
+"""
             html += render_parameters_html(t)
             if t.get('comment'):
                 html += f"<b>Comment:</b> {t['comment']}<br>"
@@ -210,9 +252,26 @@ def generate_pdf_report(id):
                 html += f"<b>Interpretation:</b> {t['intr_detail']}<br>"
             vinfo = t.get('test_verify_info', [{}])[0]
             html += f"<b>Verified By:</b> {vinfo.get('name','')} | <b>Qualification:</b> {vinfo.get('qualification','')} | <b>Verified At:</b> {vinfo.get('verified_at','')}<br><hr>"
+            
+            footer_path = os.path.join(current_app.root_path, "static", "report_footer.jpeg")
 
-        unpaid = total_fee_db - paid_db - discount_db
-        html += f"<b>Total Fee:</b> {total_fee_db} | <b>Paid:</b> {paid_db} | <b>Discount:</b> {discount_db} | <b>Unpaid:</b> {unpaid}</body></html>"
+            if not os.path.exists(footer_path):
+                raise FileNotFoundError(f"Footer image not found at {footer_path}")
+
+            with open(footer_path, "rb") as f:
+                footer_data = base64.b64encode(f.read()).decode()
+
+            html += f"""
+            <pdf:footer>
+    <div style="text-align:center; width:100%; padding:5px 0;">
+        <img src="data:image/jpeg;base64,{footer_data}" style="width:100%; height:110px;">
+    </div>
+</pdf:footer>
+
+"""
+
+
+
 
         # Save PDF
         pdf_filename = f"report_{patient_id}_{int(datetime.now().timestamp())}.pdf"
