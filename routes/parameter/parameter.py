@@ -4,6 +4,7 @@ from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
 import MySQLdb
 import datetime
+import time
 parameter_bp = Blueprint('parameter', __name__, url_prefix='/api/parameter')
 mysql = MySQL()
 
@@ -12,6 +13,7 @@ mysql = MySQL()
 # --------------------- Get all parameters (Search + Pagination) --------------------- #
 @parameter_bp.route('/', methods=['GET'])
 def get_all_parameters():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -49,6 +51,8 @@ def get_all_parameters():
 
         cursor.execute(base_query, values)
         parameters = cursor.fetchall()
+        
+        end_time = time.time()
 
         total_pages = math.ceil(total_records / record_per_page)
 
@@ -56,7 +60,8 @@ def get_all_parameters():
             "data": parameters,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "executionTime": end_time - start_time
         }), 200
 
     except Exception as e:
@@ -65,11 +70,13 @@ def get_all_parameters():
 # --------------------- Get parameter by ID --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
 def get_parameter(parameter_id):
+    start_time = time.time()
     try:
         cur = mysql.connection.cursor()
         cur.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
         parameter = cur.fetchone()
         cur.close()
+        end_time = time.time()
         if parameter:
             return jsonify({
                 "id": parameter[0],
@@ -80,7 +87,8 @@ def get_parameter(parameter_id):
                 "normal_value": parameter[5],
                 "default_value": parameter[6],
                 "dropdown_value": parameter[9],
-                "status" : 200
+                "status" : 200,
+                "executionTime": end_time - start_time
             }), 200
         else:
             return jsonify({"error": "Parameter not found"}), 404

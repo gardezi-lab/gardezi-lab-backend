@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, Blueprint, current_app
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
 from datetime import datetime
+import time
 
 cash_bp = Blueprint('cash', __name__, url_prefix='/api/cash')
 mysql = MySQL()
@@ -10,6 +11,7 @@ mysql = MySQL()
 
 @cash_bp.route("/")
 def get_data_cash():
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         
@@ -35,7 +37,9 @@ def get_data_cash():
         cursor.execute(query, params)
         result = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "data is fetched successfuly","result": result})
+        return jsonify({"message": "data is fetched successfuly","result": result,
+                        "executionTime": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)})

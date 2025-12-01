@@ -11,6 +11,7 @@ mysql = MySQL()
 # --------------------- Companies Panel GET with Search + Pagination -------------------
 @companies_panel_bp.route('/', methods=['GET'])
 def get_companies_panels():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -42,10 +43,12 @@ def get_companies_panels():
         
         cursor.execute(base_query,params)
         company_panel = cursor.fetchall()
+        end_time = time.time()
         
         return jsonify({
             "data": company_panel,
-            "status": 200
+            "status": 200,
+            "executionTime": end_time - start_time
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

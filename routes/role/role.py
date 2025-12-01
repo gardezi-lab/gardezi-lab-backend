@@ -2,6 +2,7 @@ import math
 from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
+import time
 
 role_bp = Blueprint('role', __name__, url_prefix='/api/role')
 mysql = MySQL()
@@ -11,6 +12,7 @@ mysql = MySQL()
 # --------------------- Get all roles (Search + Pagination) --------------------- #
 @role_bp.route('/', methods=['GET'])
 def get_roles():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor(DictCursor)
@@ -44,14 +46,16 @@ def get_roles():
         values.extend([record_per_page, offset])
         cur.execute(base_query, values)
         roles = cur.fetchall()
-
+        
+        end_time = time.time()
         total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
             "data": roles,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "executionTime": end_time - start_time
         }), 200
 
         return jsonify({

@@ -2,68 +2,65 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
 import math
+import time
+import pandas as pd
 
 department_bp = Blueprint('department', __name__, url_prefix='/api/department')
 mysql = MySQL()
 
 # ---------------- Department GET ------------------- #
 @department_bp.route('/', methods=['GET'])
-def get_departments():
+def get_departments_optimized():
+    start_time = time.time()
     try:
-        mysql = current_app.mysql # type: ignore
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  #  DictCursor use karo
+        mysql = current_app.mysql  # type: ignore
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Query params from frontend
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
-
         offset = (current_page - 1) * record_per_page
 
-        # Base query
-        base_query = "SELECT * FROM departments"
-        where_clauses = []
+        sql = "SELECT SQL_CALC_FOUND_ROWS id, department_name FROM departments"
         values = []
 
         if search:
-            where_clauses.append("department LIKE %s")
+            sql += " WHERE department_name LIKE %s"
             values.append(f"%{search}%")
 
-        if where_clauses:
-            base_query += " WHERE " + " AND ".join(where_clauses)
-
-        # Count total records
-        count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
-        cursor.execute(count_query, values)
-        total_records = cursor.fetchone()["total"]
-
-        # Add pagination
-        base_query += " LIMIT %s OFFSET %s"
+        sql += " LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
 
-        cursor.execute(base_query, values)
-        departments = cursor.fetchall()
-        #
-        # Transform data into custom format
-        formatted_departments = [
-            {
-                "id": dept["id"],
-                "department_name": dept["department_name"]
-            }
-            for dept in departments
-        ]
+        cursor.execute(sql, values)
+        rows = cursor.fetchall()
 
+        # Use pandas for vectorized transformation
+        df = pd.DataFrame(rows)
+        formatted_departments = df.to_dict(orient='records')
+
+        # get total records in same session
+        cursor.execute("SELECT FOUND_ROWS() as total")
+        total_records = cursor.fetchone()['total']
         total_pages = math.ceil(total_records / record_per_page)
+
+        end_time = time.time()
+        execution_time_ms = round((end_time - start_time) * 1000, 2)
 
         return jsonify({
             "data": formatted_departments,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "executionTimeMs": execution_time_ms
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        end_time = time.time()
+        execution_time_ms = round((end_time - start_time) * 1000, 2)
+        return jsonify({
+            "error": str(e),
+            "executionTimeMs": execution_time_ms
+        }), 500
 
 
 # ---------------- Department Create ------------------- #

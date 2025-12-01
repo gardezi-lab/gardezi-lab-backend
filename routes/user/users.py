@@ -25,6 +25,7 @@ def create_user():
             plain_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
         age = data.get("age")
         role = data.get("role")
+        cc = data.get("cc")
 
         # Validation
         if not all([name, contact_no, user_name, age, role]):
@@ -34,8 +35,8 @@ def create_user():
             return jsonify({"message": "Name  or username cannot be number"}), 400
 
         insert_query = """
-            INSERT INTO users (name, contact_no, user_name, password, role, age, discount)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO users (name, contact_no, user_name, password, role, age, discount, cc)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor = mysql.connection.cursor()
         cursor.execute(insert_query, (
@@ -45,7 +46,8 @@ def create_user():
             plain_password,
             role,
             age,
-            discount
+            discount,
+            cc
         ))
         mysql.connection.commit()
 
@@ -57,7 +59,8 @@ def create_user():
             "role": role,
             "age": age,
             "password": plain_password,
-            "discount": discount
+            "discount": discount,
+            "cc": cc
             
         }), 201
 
@@ -78,7 +81,7 @@ def get_users():
         offset = (current_page - 1) * record_per_page
 
         # base query
-        base_query = "SELECT id, name, contact_no, user_name, password, role, age, discount FROM users"
+        base_query = "SELECT id, name, contact_no, user_name, password, role, age, discount, cc FROM users"
         where_clauses = []
         values = []
 
@@ -312,4 +315,34 @@ def update_password(id):
     except Exception as e:
         return jsonify({"error": str(e)})
     
-            
+#------------------ get user collection center ----------------
+@users_bp.route('/collection_centers/', methods=['GET'])
+def get_collection_centers():
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  # ✅ DictCursor for JSON response
+
+        #  Sirf vo get krny hain jin mn cc column mn value ho
+        query = """
+            SELECT 
+                id, 
+                name, 
+                contact_no, 
+                user_name, 
+                password, 
+                role, 
+                age,
+                cc
+            FROM users 
+            WHERE cc IS NOT NULL
+        """
+        cursor.execute(query)
+        doctors = cursor.fetchall()
+        cursor.close()
+
+        return jsonify({
+            "data": doctors,
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

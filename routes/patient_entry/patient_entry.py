@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 import json
 import random
 import os
+import time
 
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
@@ -605,6 +606,7 @@ def update_fee(id):
 
 @patient_entry_bp.route('/', methods=['GET'])
 def get_all_patient_entries():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -669,9 +671,11 @@ def get_all_patient_entries():
             """, (patient["id"],patient["cid"],))
             tests = cursor.fetchall()
             patient["tests"] = tests
+        end_time = time.time()
 
         return jsonify({
-            "patients": patient_data_list
+            "patients": patient_data_list,
+            "executionTime": end_time - start_time
         }), 200
 
     except Exception as e:
@@ -945,7 +949,8 @@ def get_unverified_tests():
 #---------------------- #TODO GET patient activiety ------------------
 
 @patient_entry_bp.route('/activity/<int:patient_id>', methods=['GET'])
-def get_patient_activity(patient_id): 
+def get_patient_activity(patient_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -960,11 +965,13 @@ def get_patient_activity(patient_id):
         activities = cursor.fetchall()
 
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "patient_id": patient_id,
             "activities": activities,
-            "total_activities": len(activities)
+            "total_activities": len(activities),
+            "executionTime": end_time - start_time
         }), 200
 
     except Exception as e:
@@ -972,7 +979,7 @@ def get_patient_activity(patient_id):
         return jsonify({"error": str(e)}), 500
 
 
- # ---------------- TODO Patient, tests, counter, activity_log, results all are deleted by counter id ----------------------
+# ---------------- TODO Patient, tests, counter, activity_log, results all are deleted by counter id ----------------------
 
 @patient_entry_bp.route('/all_delete/<int:id>', methods=['DELETE'])
 def delete_alldata_patient(id):
@@ -1001,3 +1008,109 @@ def delete_alldata_patient(id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+#-------------------GEt all patient activity ------------
+@patient_entry_bp.route("/activity/", methods=["GET"])
+def get_activity():
+    try:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM patient_activity_log ORDER BY created_at DESC")
+        activities = cursor.fetchall()
+        #activities mn patient id a raha os patient ka name get krna hay 
+        for activity in activities:
+            patient_id = activity['patient_id']
+            cursor.execute("SELECT patient_name, mr_number FROM patient_entry WHERE id = %s", (patient_id,))
+            patient = cursor.fetchone()
+            if patient:
+                activity['patient_name'] = patient['patient_name']
+                activity['mr_number'] = patient['mr_number']
+            else:
+                activity['patient_name'] = None
+                activity['mr_number'] = None
+            
+        cursor.close()
+        return jsonify({"activities": activities, "status": 200})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+#------------------TODO show all patient with just simple listing with name of pt. mr. date. amount their due amount is remain with filter from and due date-------
+@patient_entry_bp.route('/due_patients', methods=['GET'])
+def simple_patient_list():
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+
+    # Step 1: Basic query
+    query = "SELECT * FROM counter WHERE paid < total_fee"
+    params = []
+
+    # Date filters
+    if from_date and to_date:
+        query += " AND DATE(created_at) BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+    elif from_date:
+        query += " AND DATE(created_at) >= %s"
+        params.append(from_date)
+    elif to_date:
+        query += " AND DATE(created_at) <= %s"
+        params.append(to_date)
+
+    mysql = current_app.mysql
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Step 2: Fetch due counter records
+    cursor.execute(query, tuple(params))
+    counter_data = cursor.fetchall()
+
+    final_data = []
+
+    # Step 3: Loop — fetch patient data separately
+    for row in counter_data:
+        pt_id = row["pt_id"]
+
+        cursor.execute(
+            "SELECT patient_name, mr_number FROM patient_entry WHERE id = %s",
+            (pt_id,)
+        )
+        patient = cursor.fetchone()
+
+        # Response build
+        final_data.append({
+            "id": row.get("id"),
+            "pt_id": pt_id,
+            "name": patient["patient_name"] if patient else "",
+            "mr_number": patient["mr_number"] if patient else "",
+            "total_fee": row.get("total_fee"),
+            "paid": row.get("paid"),
+            "due_amount": row.get("total_fee") - row.get("paid"),
+        })
+
+    cursor.close()
+
+    return jsonify({"data": final_data, "status": 200})
+
+# -----------------------discount report ------------------------- 
+@patient_entry_bp.route('/discount_report', methods=['GET'])
+def discount_report():
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+
+    query = "SELECT * FROM counter WHERE discount > 0"
+    params = []
+
+    if from_date and to_date:
+        query += " AND DATE(created_at) BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+    elif from_date:
+        query += " AND DATE(created_at) >= %s"
+        params.append(from_date)
+    elif to_date:
+        query += " AND DATE(created_at) <= %s"
+        params.append(to_date)
+
+    mysql = current_app.mysql
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute(query, tuple(params))
+    data = cursor.fetchall()
+    cursor.close()
+
+    return jsonify({"data": data, "status": 200})

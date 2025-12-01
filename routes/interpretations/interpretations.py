@@ -1,6 +1,8 @@
 import math
 from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
+import MySQLdb
+import time
 
 
 # Blueprint with API prefix
@@ -44,6 +46,7 @@ def create_interpretation():
 # -------------------- GET with Search + Pagination -------------------- #
 @interpretation_bp.route("/", methods=["GET"])
 def get_interpretations():
+    start_time = time.time()
     try:
         mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor) 
@@ -79,14 +82,16 @@ def get_interpretations():
 
         cursor.execute(base_query, values)
         interpretations = cursor.fetchall()
-
+        
+        end_time = time.time()
         total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
             "data": interpretations,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "executionTime": end_time - start_time
         }), 200
 
     except Exception as e:   
