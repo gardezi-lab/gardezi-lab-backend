@@ -60,6 +60,7 @@ def get_all_test_profiles():
 #----------------------GET all test without pagination-------------------
 @test_profile_bp.route('/get_test/', methods=['GET'])
 def get_all_test_profile():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor(DictCursor)
@@ -69,11 +70,13 @@ def get_all_test_profile():
         
         cur.execute(base_query)
         test_profiles = cur.fetchall()
+        end_time = time.time()
 
         
 
         return jsonify({
             "data": test_profiles,
+            "executionTime": end_time - start_time
             
         }), 200
 
