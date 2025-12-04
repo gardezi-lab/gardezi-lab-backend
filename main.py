@@ -37,6 +37,8 @@ from routes.account_book.stock_items.stock_items import stock_items_bp
 from routes.account_book.stock_purchcese.stock_purchcese import stock_purchase_bp
 from routes.account_book.stock_usage.stock_usage import stock_usage_bp
 from routes.account_book.inventory.inventory import inventory_bp
+from routes.collectioncenter.collectioncenter import collectioncenter_bp
+from routes.lab.lab import lab_bp
 
 # Load .env variables
 load_dotenv()
@@ -114,6 +116,8 @@ app.register_blueprint(report_bp)
 app.register_blueprint(pdfreport_bp)
 app.register_blueprint(authentication_bp)
 app.register_blueprint(permission_bp)
+app.register_blueprint(collectioncenter_bp)
+app.register_blueprint(lab_bp)
 #main
 
 # ---------- Account Book Blueprints ----------
