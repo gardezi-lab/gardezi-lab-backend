@@ -5,18 +5,22 @@ import base64
 from io import BytesIO
 from datetime import datetime
 import MySQLdb.cursors
+import time
+from routes.authentication.authentication import token_required
 
 invoice_bp = Blueprint('invoice', __name__, url_prefix='/api/invoice')
 mysql = MySQL()
 
 # ------------------ Invoice API -------------------
 @invoice_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def generate_invoice(id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-       
+    
 
-     
+    
         cursor.execute("SELECT pt_id, reff_by, remarks, sample, total_fee, paid, discount, user_id FROM counter WHERE id = %s", (id,))
         result = cursor.fetchone()
 
@@ -44,7 +48,7 @@ def generate_invoice(id):
             """, (patient_id, id, pt_entry_log))
         mysql.connection.commit()
 
-       
+    
         cursor.execute("""
             SELECT 
                 id, patient_name, cell, gender, age, MR_number
@@ -121,6 +125,8 @@ def generate_invoice(id):
             "unpaid": unpaid,
             "qr_code": qr_data_url
         }
+        end_time = time.time()
+        invoice_data['execution_time'] = end_time - start_time
 
         return jsonify(invoice_data), 200
 

@@ -1,5 +1,6 @@
 import math
 from flask import Blueprint, request, jsonify, current_app
+from routes.authentication.authentication import token_required
 import MySQLdb.cursors
 from flask_mysqldb import MySQL
 
@@ -9,6 +10,7 @@ mysql = MySQL()
 
 # -------------------- GET with Search + Pagination -------------------- #
 @account_bp.route('/', methods=['GET'])
+@token_required
 def get_accountheads():
     try:
         mysql = current_app.mysql  # type: ignore
@@ -72,6 +74,7 @@ def get_accountheads():
 
 
 @account_bp.route('/', methods=['POST'])
+@token_required
 def create_accounthead():
     try:
         mysql = current_app.mysql
@@ -106,6 +109,7 @@ def create_accounthead():
         return jsonify({"error": str(e)}), 500
     
 @account_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_account_by_id(id):
     try:
         mysql = current_app.mysql # type: ignore
@@ -125,6 +129,7 @@ def get_account_by_id(id):
         return jsonify({"error": str(e)}), 500
 
 @account_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_head(id): 
     try:
         cursor = mysql.connection.cursor() # type: ignore
@@ -142,6 +147,7 @@ def delete_head(id):
 
 # -------------------- PUT (Update) -------------------- #
 @account_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_account_head(id):
     try:
         data = request.get_json()
@@ -182,6 +188,7 @@ def update_account_head(id):
 
 # -------------------- DELETE -------------------- #
 @account_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_account_head(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -202,6 +209,7 @@ def delete_account_head(id):
 
 # -------------------- GET by ID -------------------- #
 @account_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_account_head_by_id(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)

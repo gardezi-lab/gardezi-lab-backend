@@ -1,12 +1,16 @@
 import MySQLdb.cursors
 from flask import Blueprint, jsonify, request, current_app
 from flask_mysqldb import MySQL
+import time
+from routes.authentication.authentication import token_required
 
 account_settings_bp = Blueprint('default', __name__, url_prefix='/api/default')
 mysql = MySQL()
 
 @account_settings_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_default_values(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         data = request.get_json()
@@ -15,20 +19,17 @@ def update_default_values(id):
         default_bank = data.get('default_bank')
         default_stock_account = data.get('default_stock_account')  
 
-        # Validate at least one field
         if default_cash is None and default_bank is None and default_stock_account is None:
             return jsonify({"error": "At least one field is required"}), 400
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # Check if record exists
         cursor.execute("SELECT * FROM account_setting WHERE id = %s", (id,))
         record = cursor.fetchone()
         if not record:
             cursor.close()
             return jsonify({"message": "Record not found"}), 404
 
-        #  Validate IDs exist in account_head
         for field_name, field_value in [
             ("default_cash", default_cash),
             ("default_bank", default_bank),
@@ -41,7 +42,6 @@ def update_default_values(id):
                     cursor.close()
                     return jsonify({"error": f"{field_name} {field_value} does not exist in account_head"}), 400
 
-        # Update record
         cursor.execute("""
             UPDATE account_setting
             SET 
@@ -54,9 +54,13 @@ def update_default_values(id):
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+
         return jsonify({
             "message": "Record updated successfully",
-            "id": id
+            "id": id,
+            "time_calculated": execution_time
         }), 200
 
     except Exception as e:
@@ -64,23 +68,22 @@ def update_default_values(id):
 
 
 
-    # -------------------- GET -------------------- #
+# -------------------- GET -------------------- #
 
-    
 @account_settings_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_default_values(id):
+    start_time = time.time()   
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        #  Fetch account_setting record
         cursor.execute("SELECT * FROM account_setting WHERE id = %s", (id,))
         record = cursor.fetchone()
         if not record:
             cursor.close()
             return jsonify({"message": "Record not found"}), 404
 
-        #  List of fields to fetch names for
         head_fields = ['default_cash', 'default_bank', 'default_stock_account']
 
         for field in head_fields:
@@ -94,9 +97,13 @@ def get_default_values(id):
 
         cursor.close()
 
+        end_time = time.time()                 
+        execution_time = end_time - start_time   
+
         return jsonify({
             "message": "Record fetched successfully",
-            "data": record
+            "data": record,
+            "time_calculated": execution_time   
         }), 200
 
     except Exception as e:

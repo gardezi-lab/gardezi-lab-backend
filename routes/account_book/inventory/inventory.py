@@ -1,59 +1,72 @@
 import MySQLdb.cursors
-from flask import Blueprint, jsonify, current_app
-
+import math, time
+from flask import Blueprint, jsonify, current_app, request
+from routes.authentication.authentication import token_required
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/api/inventory')
 
 @inventory_bp.route('/all', methods=['GET'])
+@token_required
 def get_all_inventory():
-    """
-    Sare inventory items + remaining stock show karne ka route
-    """
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        cursor.execute("SELECT * FROM stock_items ORDER BY id ASC")
-        items = cursor.fetchall()
+        # ---------------- Query Params ---------------- #
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+        offset = (current_page - 1) * record_per_page
 
-        inventory_list = []
+        # ---------------- Base Query ---------------- #
+        where_clause = "WHERE 1=1"
+        values = []
 
-        for item in items:
-            item_id = item['id']
-            item_name = item['name']
+        if search:
+            where_clause += " AND si.name LIKE %s"
+            values.append(f"%{search}%")
 
-            # Total purchase qty
-            cursor.execute("""
-                SELECT COALESCE(SUM(qty), 0) AS total_purchase
-                FROM stock_purchases
-                WHERE stock_item_id = %s
-            """, (item_id,))
-            total_purchase = cursor.fetchone()['total_purchase']
+        # ---------------- Count Total Records ---------------- #
+        count_query = f"""
+            SELECT COUNT(*) AS total
+            FROM stock_items si
+            {where_clause}
+        """
+        cursor.execute(count_query, values)
+        total_records = cursor.fetchone()['total'] or 0
 
-            # Total usage qty
-            cursor.execute("""
-                SELECT COALESCE(SUM(qty), 0) AS total_usage
-                FROM stock_usage
-                WHERE stock_item_id = %s
-            """, (item_id,))
-            total_usage = cursor.fetchone()['total_usage']
-
-            # Remaining stock
-            remaining_qty = total_purchase - total_usage
-
-            inventory_list.append({
-                "item_id": item_id,
-                "item_name": item_name,
-                # "total_purchased": total_purchase,
-                # "total_used": total_usage,
-                "remaining_qty": remaining_qty
-            })
+        # ---------------- Paginated Inventory Data ---------------- #
+        data_query = f"""
+            SELECT 
+                si.id AS item_id,
+                si.name AS item_name,
+                COALESCE(SUM(sp.qty), 0) - COALESCE(SUM(su.qty), 0) AS remaining_qty
+            FROM stock_items si
+            LEFT JOIN stock_purchases sp ON sp.stock_item_id = si.id
+            LEFT JOIN stock_usage su ON su.stock_item_id = si.id
+            {where_clause}
+            GROUP BY si.id
+            ORDER BY si.id ASC
+            LIMIT %s OFFSET %s
+        """
+        data_values = values + [record_per_page, offset]
+        cursor.execute(data_query, data_values)
+        inventory_list = cursor.fetchall()
 
         cursor.close()
 
+        # ---------------- Pagination ---------------- #
+        total_pages = math.ceil(total_records / record_per_page) if record_per_page else 1
+        execution_time = time.time() - start_time
+
         return jsonify({
             "message": "All inventory items fetched successfully",
-            "total": len(inventory_list),
-            "data": inventory_list
+            "data": inventory_list,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page,
+            "execution_time": execution_time
         }), 200
 
     except Exception as e:

@@ -5,6 +5,8 @@ from flask_mysqldb import MySQL
 import MySQLdb
 import datetime
 import time
+from routes.authentication.authentication import token_required
+
 parameter_bp = Blueprint('parameter', __name__, url_prefix='/api/parameter')
 mysql = MySQL()
 
@@ -12,6 +14,7 @@ mysql = MySQL()
 
 # --------------------- Get all parameters (Search + Pagination) --------------------- #
 @parameter_bp.route('/', methods=['GET'])
+@token_required
 def get_all_parameters():
     start_time = time.time()
     try:
@@ -69,6 +72,7 @@ def get_all_parameters():
 
 # --------------------- Get parameter by ID --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
+@token_required
 def get_parameter(parameter_id):
     start_time = time.time()
     try:
@@ -98,7 +102,9 @@ def get_parameter(parameter_id):
 
 # --------------------- Create a new parameter --------------------- #
 @parameter_bp.route('/<int:test_profile_id>', methods=['POST'])
+@token_required
 def create_parameter(test_profile_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -143,15 +149,18 @@ def create_parameter(test_profile_id):
         ))
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Parameter added successfully"}), 201
+        return jsonify({"message": "Parameter added successfully", "execution_time": end_time - start_time}), 201
 
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
 #---------------------- GET parameter by test_profile_id --------
 @parameter_bp.route('/test_parameters/<int:test_profile_id>', methods=['GET'])
+@token_required
 def get_parameters(test_profile_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -187,13 +196,15 @@ def get_parameters(test_profile_id):
         cursor.execute(query, (test_profile_id,))
         parameters = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
 
         #  If no data found
         if not parameters:
             return jsonify({
                 "message": "No parameters found for this test profile",
                 "test_profile": test_profile,
-                "parameters": []
+                "parameters": [],
+                "execution_time": end_time - start_time
             }), 200
 
         #  Return list of parameters (not single object)
@@ -202,7 +213,9 @@ def get_parameters(test_profile_id):
             "message": "Parameters fetched successfully",
             "test_profile": test_profile,
             "total_parameters": len(parameters),
-            "parameters": parameters
+            "parameters": parameters,
+                "execution_time": end_time - start_time
+            
         }), 200
 
     except Exception as e:
@@ -213,7 +226,9 @@ def get_parameters(test_profile_id):
 
 # --------------------- Update an existing parameter --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['PUT'])
+@token_required
 def update_parameter(parameter_id):
+    start_time = time.time()
     try:
         data = request.get_json()
 
@@ -251,8 +266,9 @@ def update_parameter(parameter_id):
 
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Parameter updated successfully", "status": 200}), 200
+        return jsonify({"message": "Parameter updated successfully", "status": 200, "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         mysql = current_app.mysql
@@ -263,7 +279,9 @@ def update_parameter(parameter_id):
 
 # --------------------- Delete a parameter --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['DELETE'])
+@token_required
 def delete_parameter(parameter_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
@@ -276,8 +294,9 @@ def delete_parameter(parameter_id):
         cur.execute("DELETE FROM parameters WHERE id = %s", (parameter_id,))
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Parameter deleted successfully","status":200}), 200
+        return jsonify({"message": "Parameter deleted successfully","status":200, "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
         
@@ -285,7 +304,9 @@ def delete_parameter(parameter_id):
         return jsonify({"error": str(e)}), 500
     #-------------------parameter search by parameter name --------------------
 @parameter_bp.route('/search/<string:parameter_name>', methods=['GET'])
+@token_required
 def search_parameter(parameter_name):
+    start_time = time.time()
     try:
         cur = mysql.connection.cursor()
         cur.execute("SELECT * FROM parameters WHERE parameter_name LIKE %s", ('%' + parameter_name + '%',))
@@ -310,14 +331,21 @@ def search_parameter(parameter_name):
                 
             })
         cur.close()
-        return jsonify(parameters), 200
+        end_time = time.time()
+        return jsonify({
+            "parameters": parameters,
+            "execution_time": end_time - start_time
+        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # ----------------------TODO parameters value ----------------
 @parameter_bp.route('/dropdown_value', methods=['POST'])
+@token_required
 def add_value():
+    
+    start_time = time.time()
     
     data = request.get_json()
     
@@ -336,10 +364,13 @@ def add_value():
             value,parameter_id))
     cursor.connection.commit()
     cursor.close()
-    return jsonify({"message": 'value is added sucessfuly', "status": 201})
+    end_time = time.time()
+    return jsonify({"message": 'value is added sucessfuly', "status": 201, "execution_time": end_time - start_time})
 # -------------------TODO GET value by parameter-id --------------------
 @parameter_bp.route('/dropdown_value/<int:parameter_id>', methods=['GET'])
+@token_required
 def get_parameter_value(parameter_id):
+    start_time = time.time()
     try:
         cur = mysql.connection.cursor(DictCursor)
         cur.execute("SELECT id, parameter_id, value, created_at FROM parameter_value WHERE parameter_id = %s", (parameter_id,))
@@ -359,11 +390,13 @@ def get_parameter_value(parameter_id):
             r_copy = dict(r)
             r_copy.pop('parameter_id', None)
             dropdown_values.append(r_copy)
+        end_time = time.time()
 
         return jsonify({
             "parameter_id": rows[0]['parameter_id'],
             "dropdown_values": dropdown_values,
-            "status": 200
+            "status": 200,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
@@ -371,7 +404,9 @@ def get_parameter_value(parameter_id):
 
 # ----------------- TODO DELETE parameter value parameter_id--------------
 @parameter_bp.route('/dropdown_value/<int:id>', methods=['DELETE'])
+@token_required
 def delete_parameter_value(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
@@ -384,8 +419,10 @@ def delete_parameter_value(id):
         cur.execute("DELETE FROM parameter_value WHERE id = %s", (id,))
         mysql.connection.commit()
         cur.close()
+        
+        end_time = time.time()
 
-        return jsonify({"message": "Parameter deleted successfully","status":200}), 200
+        return jsonify({"message": "Parameter deleted successfully","status":200, "execution_time": end_time -start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
         
@@ -393,7 +430,9 @@ def delete_parameter_value(id):
         return jsonify({"error": str(e)}), 500
 # ----------------TODO UPDATE parameter value -----------------------
 @parameter_bp.route('/value_update/<int:parameter_id>', methods=['PUT'])
+@token_required
 def update_parameter_value(parameter_id):
+    start_time = time.time()
     try:
         data = request.get_json()
 
@@ -420,8 +459,9 @@ def update_parameter_value(parameter_id):
 
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Parameter value updated successfully", "status": 200}), 200
+        return jsonify({"message": "Parameter value updated successfully", "status": 200, "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         mysql = current_app.mysql

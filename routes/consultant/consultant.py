@@ -2,6 +2,7 @@ import os, base64
 import random, string
 from flask import Blueprint, request, jsonify
 from flask_mysqldb import MySQL
+import time
 
 consultant_bp = Blueprint('consultant', __name__, url_prefix='/api/consultant')
 
@@ -14,7 +15,9 @@ mysql = MySQL()
 #---------------------Consultant POST -------------------
 @consultant_bp.route('/', methods=['POST'])
 def create_consultant_enc():
+    start_time = time.time()
     try:
+        
         data = request.get_json()
         doctor_name = data.get("doctor_name")
         contact_no = data.get("contact_no")
@@ -46,6 +49,7 @@ def create_consultant_enc():
         cursor = mysql.connection.cursor()
         cursor.execute(insert_query, (doctor_name, contact_no, hospital, user_name, plain_password, encrypted, age))
         mysql.connection.commit()
+        end_time = time.time()
 
         return jsonify({
             "message": "Consultant created successfully",
@@ -55,7 +59,8 @@ def create_consultant_enc():
             "hospital": hospital,
             "user_name": user_name,
             "password": plain_password,   # plain only for returning once
-            "status": 201
+            "status": 201,
+            "execution_time": end_time - start_time
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -64,6 +69,7 @@ def create_consultant_enc():
 #-------------------Consultant GET --------------------
 @consultant_bp.route('/', methods=['GET'])
 def get_consultants_enc():
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT id, doctor_name, contact_no, hospital, user_name, password_encrypted, age FROM consultants")
@@ -79,6 +85,10 @@ def get_consultants_enc():
             d['password'] = decrypted
             del d['password_encrypted']
             consultants.append(d)
+            end_time = time.time()
+            # now execution time append to consultants
+            for consultant in consultants:
+                consultant['execution_time'] = end_time - start_time
         return jsonify({
             "data": consultants,
             "status" : 200}), 200
@@ -89,6 +99,7 @@ def get_consultants_enc():
 #----------------------Consultant Get by ID -------------------
 @consultant_bp.route('/<int:id>', methods=['GET'])
 def get_consultant_by_id(id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT id, doctor_name, contact_no, hospital, user_name, password_encrypted, age FROM consultants WHERE id = %s", (id,))
@@ -103,6 +114,8 @@ def get_consultant_by_id(id):
             decrypted = None
         d['password'] = decrypted
         del d['password_encrypted']
+        end_time = time.time()
+        d['execution_time'] = end_time - start_time
         return jsonify(d), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -111,6 +124,7 @@ def get_consultant_by_id(id):
 #-------------------Consultant Update --------------------
 @consultant_bp.route('/<int:id>', methods=['PUT'])
 def update_consultant_enc(id):
+    start_time = time.time()
     try:
         data = request.get_json()
         doctor_name = data.get("doctor_name")
@@ -139,8 +153,10 @@ def update_consultant_enc(id):
         cursor = mysql.connection.cursor()
         cursor.execute(update_query, values)
         mysql.connection.commit()
+        end_time = time.time()
+        
 
-        return jsonify({"message": "Consultant updated (encrypted) successfully"}), 200
+        return jsonify({"message": "Consultant updated (encrypted) successfully", "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
@@ -148,11 +164,14 @@ def update_consultant_enc(id):
 #-------------------Consultant Delete --------------------
 @consultant_bp.route('/<int:id>', methods=['DELETE'])
 def delete_consultant(id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("DELETE FROM consultants WHERE id = %s", (id,))
         mysql.connection.commit()
-        return jsonify({"message": "Consultant deleted successfully"}), 200
+        end_time = time.time()
+        
+        return jsonify({"message": "Consultant deleted successfully", "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
@@ -160,6 +179,7 @@ def delete_consultant(id):
 #-------------------Consultant Search by Name --------------------
 @consultant_bp.route('/search/<string:name>', methods=['GET'])  
 def search_consultants(name):
+    start_tiem = time.time()
     try:
         cursor = mysql.connection.cursor()
         search_query = """
@@ -181,6 +201,10 @@ def search_consultants(name):
             d['password'] = decrypted
             del d['password_encrypted']
             consultants.append(d)
+            end_time = time.time()
+            # now execution time append to consultants
+            for consultant in consultants:
+                consultant['execution_time'] = end_time - start_time
         return jsonify(consultants), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

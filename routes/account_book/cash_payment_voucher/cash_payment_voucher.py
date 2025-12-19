@@ -1,13 +1,18 @@
+import time
 import MySQLdb.cursors
 from flask import Blueprint, jsonify, request, current_app
+from routes.authentication.authentication import token_required
 from flask_mysqldb import MySQL
-
+import math
 cash_payment_bp = Blueprint('cash_payment', __name__, url_prefix='/api/cash_payment_voucher')
 mysql = MySQL()
 
 # -------------------- CREATE (POST) -------------------- #
 @cash_payment_bp.route('/', methods=['POST'])
+@token_required
 def create_cash_payment_voucher():
+    start_time = time.time() 
+
     try:
         mysql = current_app.mysql  
         data = request.get_json()
@@ -26,7 +31,7 @@ def create_cash_payment_voucher():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Generate next listing_voucher ----
+        # Get last voucher
         cursor.execute("""
             SELECT listing_voucher 
             FROM journal_voucher 
@@ -46,14 +51,14 @@ def create_cash_payment_voucher():
 
         listing_voucher = f"{voucher_type}-{last_number + 1:03d}"
 
-        # ---- Insert main voucher record ----
+        # Insert main voucher
         cursor.execute("""
             INSERT INTO journal_voucher (date, narration, voucher_type, listing_voucher)
             VALUES (%s, %s, %s, %s)
         """, (date, narration, voucher_type, listing_voucher))
         voucher_id = cursor.lastrowid
 
-        # ---- Get default cash account from account_setting ----
+        # Get default cash account
         cursor.execute("SELECT default_cash FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
 
@@ -62,7 +67,7 @@ def create_cash_payment_voucher():
 
         default_cash_id = record['default_cash']
 
-        # ---- Insert all debit entries (expenses, vendors, etc.) ----
+        # Insert all debit entries
         total_dr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -79,7 +84,7 @@ def create_cash_payment_voucher():
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (voucher_id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert default cash account (credit entry) ----
+        # Insert default cash account (CR)
         cursor.execute("""
             INSERT INTO journal_voucher_entries 
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -89,22 +94,27 @@ def create_cash_payment_voucher():
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()   
+        execution_time = end_time - start_time
+
         return jsonify({
             "message": "Cash Payment Voucher created successfully",
             "voucher_id": voucher_id,
             "listing_voucher": listing_voucher,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "time_calculated": execution_time
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # -------------------- UPDATE (PUT) -------------------- #
 @cash_payment_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_cash_payment_voucher(id):
-    """
-    Update an existing Cash Payment Voucher (CPV)
-    """
+    start_time = time.time()  
+
     try:
         mysql = current_app.mysql  
         data = request.get_json()
@@ -114,7 +124,6 @@ def update_cash_payment_voucher(id):
         voucher_type = data.get('voucher_type', 'CPV')  
         entries = data.get('entries')  
 
-        # ---- Validation ----
         if not date or not narration:
             return jsonify({"error": "Date and narration are required"}), 400
 
@@ -124,24 +133,24 @@ def update_cash_payment_voucher(id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Check if voucher exists ----
+        # Check if exists
         cursor.execute("SELECT * FROM journal_voucher WHERE id = %s", (id,))
         voucher = cursor.fetchone()
         if not voucher:
             cursor.close()
             return jsonify({"message": "Cash Payment Voucher not found"}), 404
 
-        # ---- Update main voucher record ----
+        # Update main voucher
         cursor.execute("""
             UPDATE journal_voucher
             SET date = %s, narration = %s, voucher_type = %s
             WHERE id = %s
         """, (date, narration, voucher_type, id))
 
-        # ---- Delete existing entries before reinserting ----
+        # Delete previous entries
         cursor.execute("DELETE FROM journal_voucher_entries WHERE journal_voucher_id = %s", (id,))
 
-        # ---- Get default cash account ----
+        # Get default cash account
         cursor.execute("SELECT default_cash FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
 
@@ -150,7 +159,7 @@ def update_cash_payment_voucher(id):
 
         default_cash_id = record['default_cash']
 
-        # ---- Reinsert all debit entries ----
+        # Insert debit entries
         total_dr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -167,7 +176,7 @@ def update_cash_payment_voucher(id):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert default cash account  ----
+        # Insert default cash entry (CR)
         cursor.execute("""
             INSERT INTO journal_voucher_entries 
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -177,10 +186,14 @@ def update_cash_payment_voucher(id):
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()   
+        execution_time = end_time - start_time
+
         return jsonify({
             "message": "Cash Payment Voucher updated successfully",
             "voucher_id": id,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "time_calculated": execution_time
         }), 200
 
     except Exception as e:

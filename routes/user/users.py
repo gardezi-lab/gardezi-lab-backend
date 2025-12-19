@@ -5,6 +5,9 @@ from MySQLdb.cursors import DictCursor
 import MySQLdb
 import os
 from datetime import datetime
+import time
+from routes.authentication.authentication import token_required
+
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 mysql = MySQL()
@@ -13,7 +16,9 @@ mysql = MySQL()
 
 #--------------------- User POST -------------------
 @users_bp.route('/', methods=['POST'])
+@token_required
 def create_user():
+    start_time = time.time()
     try:
         data = request.get_json()
         name = data.get("name")
@@ -50,6 +55,7 @@ def create_user():
             cc
         ))
         mysql.connection.commit()
+        end_time = time.time()
 
         return jsonify({
             "message": "User created successfully",
@@ -60,8 +66,8 @@ def create_user():
             "age": age,
             "password": plain_password,
             "discount": discount,
-            "cc": cc
-            
+            "cc": cc,
+            "execution_time": end_time - start_time
         }), 201
 
     except Exception as e:
@@ -70,7 +76,9 @@ def create_user():
 
 #------------------- Users GET (with Search + Pagination) --------------------
 @users_bp.route('/', methods=['GET'])
+@token_required
 def get_users():
+    start_time = time.time()
     try:
         cur = mysql.connection.cursor(DictCursor)
 
@@ -104,12 +112,14 @@ def get_users():
         users = cur.fetchall()
 
         total_pages = math.ceil(total_records / record_per_page)
+        end_time = time.time()
 
         return jsonify({
             "data": users,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
@@ -118,7 +128,9 @@ def get_users():
 
 #---------------------- User Get by ID -------------------
 @users_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_user_by_id(id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(DictCursor)
         cursor.execute("""
@@ -129,6 +141,9 @@ def get_user_by_id(id):
         if not row:
             return jsonify({"error": "User not found"}), 404
         return jsonify(row), 200
+        end_time = time.time()
+        row['execution_time'] = end_time - start_time
+        return jsonify(row), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -136,7 +151,9 @@ def get_user_by_id(id):
 
 #------------------- User Update --------------------
 @users_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_user(id):
+    start_time = time.time()
     try:
         data = request.get_json()
         name = data.get("name")
@@ -162,15 +179,18 @@ def update_user(id):
             name, contact_no, user_name, role, age, discount, id
         ))
         mysql.connection.commit()
+        end_time = time.time()
 
-        return jsonify({"message": "User updated successfully"}), 200
+        return jsonify({"message": "User updated successfully", "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 #------------------- User Delete --------------------
 @users_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_user(id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT * FROM users WHERE id = %s", (id,))
@@ -179,14 +199,17 @@ def delete_user(id):
 
         cursor.execute("DELETE FROM users WHERE id = %s", (id,))
         mysql.connection.commit()
-        return jsonify({"message": "User deleted successfully"}), 200
+        end_time = time.time()
+        return jsonify({"message": "User deleted successfully", "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 #----------------- Get Role Wise User List ---------------------
 @users_bp.route('/datalist/<string:role_name>', methods=['GET'])
+@token_required
 def datalist_role(role_name):
+    start_time = time.time()
     try:
         cur = mysql.connection.cursor()
         cur.execute(
@@ -200,50 +223,25 @@ def datalist_role(role_name):
 
         if not roles:
             return jsonify({"message": "No roles found"}), 404
+        end_time = time.time()
+        roles.append()['execution_time'] = end_time - start_time
 
         return jsonify(roles), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-#-------------------------- GET all users their role is doctor------------------------
-@users_bp.route('/doctors/', methods=['GET'])
-def get_doctors_only():
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)   
 
-        #  Sirf doctors ko fetch karna
-        query = """
-            SELECT 
-                id, 
-                name, 
-                contact_no, 
-                user_name, 
-                password, 
-                role, 
-                age 
-            FROM users 
-            WHERE role = 'Doctor'
-        """
-        cursor.execute(query)
-        doctors = cursor.fetchall()
-        cursor.close()
-
-        return jsonify({
-            "data": doctors,
-            "count": len(doctors)
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 #------------------User profile ----------------
 @users_bp.route('/user_profile/<int:id>', methods=['GET'])
+@token_required
 def get_user_profile(id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(DictCursor)
         get_query = "SELECT contact_no, user_name, age, name, email, qualification,profile_pic_path, password  FROM users WHERE id = %s"
         cursor.execute(get_query,(id,))
         data = cursor.fetchone()
-        return jsonify({"data": data, "status": 200})
+        end_time = time.time()
+        return jsonify({"data": data, "status": 200, "execution_time": end_time - start_time})
     except Exception as e:
         return jsonify({"error": str(e)})
 #----------------------update_user profile---------------
@@ -251,7 +249,9 @@ UPLOAD_FOLDER = 'static/profile_pictures'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @users_bp.route('/user_profile/<int:id>', methods=['PUT'])
+@token_required
 def update_user_profile(id):
+    start_time = time.time()
     try:
         name = request.form.get("name")
         contact_no = request.form.get("contact_no")
@@ -287,18 +287,22 @@ def update_user_profile(id):
             WHERE id=%s
         """, (name, contact_no, user_name, age, email, qualification, image_path,id))
         conn.commit()
+        end_time = time.time()
 
         return jsonify({
             "message": "User updated successfully",
             "profile_pic_path": image_path,
-            "status": 200
+            "status": 200,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #-------------------- password update ------------
 @users_bp.route('/update_password/<int:id>', methods=['PUT'])
+@token_required
 def update_password(id):
+    start_time = time.time()
     try:
         data = request.get_json()
         password  = data.get('password')
@@ -311,232 +315,51 @@ def update_password(id):
             WHERE id = %s"""
         cursor.execute(update_query,(password,id,))
         conn.commit()
-        return jsonify({"message": "password is update succesfuly"})
+        end_time = time.time()
+        return jsonify({"message": "password is update succesfuly", "execution_time": end_time - start_time})
     except Exception as e:
-        return jsonify({"error": str(e)})
-    
-#------------------ get user collection center ----------------
-@users_bp.route('/collection_centers/', methods=['GET'])
-def get_collection_centers():
+        return jsonify({"error": str(e)}), 500
+
+#-------------------------- GET all users their role is doctor------------------------
+@users_bp.route('/doctors/', methods=['GET'])
+@token_required
+def get_doctors_only():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)   
 
-        #  Sirf vo get krny hain jin mn cc column mn value ho
+        #  Sirf doctors ko fetch karna
         query = """
             SELECT 
                 id, 
                 name, 
-                email, 
+                contact_no, 
+                user_name, 
                 password, 
-                location
+                role, 
+                age 
             FROM users 
-            WHERE cc IS NOT NULL
+            WHERE role = 'Doctor'
         """
         cursor.execute(query)
         doctors = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "data": doctors,
+            "count": len(doctors),
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-# ------------------ get all data their role is receptionist by their id and  from date to date -----------------------
-@users_bp.route('/receptionists_by_date/<int:center_id>', methods=['GET'])
-def get_receptionists_by_date(center_id):
-    try:
-        from_date = request.args.get('from_date')
-        to_date = request.args.get('to_date')
-
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        # Base query with JOINs
-        query = """
-            SELECT 
-                u.id AS receptionist_id,
-                u.name AS receptionist_name,
-                u.contact_no,
-                r.name AS ref_name,  -- referred by name
-                u.role,
-                u.age,
-                DATE(u.created_at) AS created_date,
-                p.patient_name AS patient_name,
-                p.mr_number,
-                c.total_fee,
-                c.paid,
-                (c.total_fee - c.paid) AS due,
-                GROUP_CONCAT(tp.test_name) AS tests,
-                c.created_at AS patient_entry_date
-            FROM users u
-            LEFT JOIN counter c ON c.user_id = u.id
-            LEFT JOIN patient_entry p ON p.id = c.pt_id
-            LEFT JOIN patient_tests t ON t.counter_id = c.id
-            LEFT JOIN test_profiles tp ON tp.id = t.test_id
-            LEFT JOIN users r ON r.id = c.reff_by
-            WHERE u.role = 'Reception' AND u.id = %s
-        """
-
-        params = [center_id]
-
-        # Apply date filter only if BOTH dates are provided
-        if from_date and to_date:
-            query += " AND c.created_at BETWEEN %s AND %s "
-            params.extend([from_date, to_date])
-
-        # Group by counter ID (patient entry) to aggregate tests
-        query += " GROUP BY c.id ORDER BY u.id DESC, c.id DESC"
-
-        cursor.execute(query, params)
-        results = cursor.fetchall()
-
-        return jsonify({
-            "data": results,
-            "count": len(results)
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        cursor.close()
-
-
-
-
-# ----------------get all data their role is doctor with from date sy to date------------------------
-@users_bp.route('/doctors_by_date/<int:doctor_id>', methods=['GET'])
-def get_doctors_by_date(doctor_id):
-    try:
-        from_date = request.args.get('from_date')
-        to_date = request.args.get('to_date')
-
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        # Query to fetch all patient test info
-        query = """
-        SELECT 
-            u.id AS doctor_id,
-            u.name AS doctor_name,
-            p.patient_name,
-            p.mr_number,
-            c.total_fee,
-            c.paid,
-            (c.total_fee - c.paid) AS due,
-            GROUP_CONCAT(DISTINCT tp.test_name ORDER BY tp.test_name ASC) AS tests,
-            MAX(t.verified_at) AS verified_date
-        FROM users u
-        LEFT JOIN patient_tests t ON t.verified_by = u.id
-        LEFT JOIN counter c ON c.id = t.counter_id
-        LEFT JOIN patient_entry p ON p.id = c.pt_id
-        LEFT JOIN test_profiles tp ON tp.id = t.test_id
-        WHERE u.role = 'Doctor' AND u.id = %s
-        """
-
-        params = [doctor_id]
-
-        if from_date and to_date:
-            query += " AND DATE(t.verified_at) BETWEEN %s AND %s"
-            params.extend([from_date, to_date])
-
-        query += " GROUP BY t.counter_id ORDER BY MAX(t.verified_at) DESC"
-
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        # Format output per doctor
-        doctor_data = {}
-        patients = []
-
-        for row in rows:
-            tests_list = row['tests'].split(',') if row['tests'] else []
-            verified_date = row['verified_date'].strftime('%Y-%m-%d %H:%M:%S') if row['verified_date'] else None
-
-            patients.append({
-                "patient_name": row['patient_name'],
-                "mr_number": row['mr_number'],
-                "total_fee": row['total_fee'],
-                "paid": row['paid'],
-                "due": row['due'],
-                "tests": tests_list,
-                "verified_date": verified_date
-            })
-
-            doctor_data = {
-                "doctor_id": row['doctor_id'],
-                "doctor_name": row['doctor_name'],
-                "patients": patients
-            }
-
-        return jsonify(doctor_data), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        cursor.close()
-# ------------------lab report ---------
-@users_bp.route('/lab_report_details/<int:id>', methods=['GET'])
-def lab_report_details(id):
-    try:
-        from_date = request.args.get('from_date')
-        to_date = request.args.get('to_date')
-
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        query = """
-            SELECT 
-                cc.id AS lab_id,
-                cc.name AS lab_name,
-                p.patient_name,
-                p.mr_number,
-                c.total_fee,
-                c.paid,
-                (c.total_fee - c.paid) AS due,
-                r.name AS reff_by,
-                GROUP_CONCAT(DISTINCT tp.test_name ORDER BY tp.test_name ASC) AS tests,
-                DATE(c.created_at) AS entry_date
-            FROM collectioncenter cc
-            LEFT JOIN counter c ON c.cc = cc.id
-            LEFT JOIN patient_entry p ON p.id = c.pt_id
-            LEFT JOIN users r ON r.id = c.reff_by
-            LEFT JOIN patient_tests t ON t.counter_id = c.id
-            LEFT JOIN test_profiles tp ON tp.id = t.test_id
-            WHERE cc.id = %s
-        """
-
-        params = [id]
-
-        if from_date and to_date:
-            query += " AND DATE(c.created_at) BETWEEN %s AND %s"
-            params.extend([from_date, to_date])
-
-        query += " GROUP BY c.id ORDER BY cc.name ASC, c.created_at DESC"
-
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        # Format tests as list
-        for row in rows:
-            row['tests'] = row['tests'].split(',') if row['tests'] else []
-
-        return jsonify({
-            "count": len(rows),
-            "data": rows
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        cursor.close()
 # ------------------get all their role is technician  -----------------------
 @users_bp.route('/technicians/', methods=['GET'])
+@token_required
 def get_technicians():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -559,63 +382,19 @@ def get_technicians():
 
         return jsonify({
             "data": technicians,
-            "count": len(technicians)
+            "count": len(technicians),
+            "execution_time": time.time() - start_time
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500 
 
-# -----------------------Technician list -----------------------
-@users_bp.route('/technician_report/<int:technician_id>', methods=['GET'])
-def technician_report(technician_id):
-    try:
-        from_date = request.args.get('from_date')
-        to_date = request.args.get('to_date')
 
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        query = """
-            SELECT 
-                u.name AS technician_name,
-                tp.test_name,
-                p.patient_name,
-                p.mr_number,
-                DATE(t.created_at) AS date
-            FROM users u
-            LEFT JOIN patient_tests t ON t.performed_by = u.id
-            LEFT JOIN counter c ON c.id = t.counter_id
-            LEFT JOIN patient_entry p ON p.id = c.pt_id
-            LEFT JOIN test_profiles tp ON tp.id = t.test_id
-            WHERE u.role = 'Technician' AND u.id = %s
-        """
-
-        params = [technician_id]
-
-        # Optional date filter
-        if from_date and to_date:
-            query += " AND DATE(t.created_at) BETWEEN %s AND %s"
-            params.extend([from_date, to_date])
-
-        query += " ORDER BY t.created_at DESC"
-
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        return jsonify({
-            "technician_id": technician_id,
-            "technician_name": rows[0]['technician_name'] if rows else None,
-            "tests": rows
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        cursor.close()
 # ---------------------get all users their role is reception-----------------------
 @users_bp.route('/receptionists/', methods=['GET'])
+@token_required
 def get_receptionists_only():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)  # ✅ DictCursor for JSON response
@@ -629,17 +408,20 @@ def get_receptionists_only():
                 user_name, 
                 password, 
                 role, 
-                age 
+                age,
+                cc
             FROM users 
-            WHERE role = 'Reception'
+            WHERE role = 'Reception' AND cc IS NOT NULL
         """
         cursor.execute(query)
         receptionists = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "data": receptionists,
-            "count": len(receptionists)
+            "count": len(receptionists),
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:

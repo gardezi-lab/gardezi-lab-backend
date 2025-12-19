@@ -1,5 +1,8 @@
+import time
+import math
 import MySQLdb.cursors
 from flask import Blueprint, jsonify, request, current_app
+from routes.authentication.authentication import token_required
 from flask_mysqldb import MySQL
 
 cash_receipt_bp = Blueprint('cash_receipt', __name__, url_prefix='/cash_receipt_voucher')
@@ -8,7 +11,10 @@ mysql = MySQL()
 
 # -------------------- CREATE (POST) -------------------- #
 @cash_receipt_bp.route('/', methods=['POST'])
+@token_required
 def create_cash_receipt_voucher():
+    start_time = time.time()  # ---- TIME START ----
+
     try:
         mysql = current_app.mysql  
         data = request.get_json()
@@ -18,7 +24,6 @@ def create_cash_receipt_voucher():
         voucher_type = data.get('voucher_type', 'CRV')
         entries = data.get('entries')
 
-        # ---- Basic validation ----
         if not date or not narration:
             return jsonify({"error": "Date and narration are required"}), 400
         if not entries or not isinstance(entries, list):
@@ -27,7 +32,6 @@ def create_cash_receipt_voucher():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Generate next listing_voucher ----
         cursor.execute("""
             SELECT listing_voucher 
             FROM journal_voucher 
@@ -47,14 +51,12 @@ def create_cash_receipt_voucher():
 
         listing_voucher = f"{voucher_type}-{last_number + 1:03d}"
 
-        # ---- Insert main journal_voucher ----
         cursor.execute("""
             INSERT INTO journal_voucher (date, narration, voucher_type, listing_voucher)
             VALUES (%s, %s, %s, %s)
         """, (date, narration, voucher_type, listing_voucher))
         voucher_id = cursor.lastrowid
 
-        # ---- Get default cash account ----
         cursor.execute("SELECT default_cash FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
 
@@ -63,7 +65,6 @@ def create_cash_receipt_voucher():
 
         default_cash_id = record['default_cash']
 
-        # ---- Insert all credit entries (customer side) ----
         total_cr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -80,7 +81,6 @@ def create_cash_receipt_voucher():
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (voucher_id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert default cash account (debit entry) ----
         cursor.execute("""
             INSERT INTO journal_voucher_entries 
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -90,26 +90,65 @@ def create_cash_receipt_voucher():
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()  # ---- TIME END ----
+        execution_time = end_time - start_time
+
         return jsonify({
             "message": "Cash Receipt Voucher created successfully",
             "voucher_id": voucher_id,
             "listing_voucher": listing_voucher,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "execution_time": execution_time
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-
-# -------------------- GET ALL -------------------- #
+# -------------------- GET ALL (Pagination + Filter) -------------------- #
 @cash_receipt_bp.route('/', methods=['GET'])
+@token_required
 def get_all_cash_receipt_vouchers():
+    start_time = time.time()
+
     try:
-        mysql = current_app.mysql  
+        mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        query = """
+        # ---------------- Query Params ---------------- #
+        search = request.args.get("search", "", type=str)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+        offset = (current_page - 1) * record_per_page
+
+        # ---------------- Base WHERE Clause ---------------- #
+        where_clause = "WHERE jv.voucher_type = 'CRV'"
+        filter_values = []
+
+        # ---------------- Filtering ---------------- #
+        if search:
+            where_clause += """
+                AND (
+                    jv.narration LIKE %s
+                    OR jv.listing_voucher LIKE %s
+                    OR DATE_FORMAT(jv.date, '%Y-%m-%d') LIKE %s
+                )
+            """
+            filter_values.extend([f"%{search}%"] * 3)
+
+        # ---------------- Count Total Records ---------------- #
+        count_query = f"""
+            SELECT COUNT(DISTINCT jv.id) AS total
+            FROM journal_voucher AS jv
+            LEFT JOIN journal_voucher_entries AS jve
+                ON jv.id = jve.journal_voucher_id
+            {where_clause}
+        """
+        cursor.execute(count_query, filter_values)
+        total_records = cursor.fetchone()["total"] or 0
+
+        # ---------------- Fetch Paginated Data ---------------- #
+        data_query = f"""
             SELECT 
                 jv.id,
                 jv.date,
@@ -120,24 +159,41 @@ def get_all_cash_receipt_vouchers():
             FROM journal_voucher AS jv
             LEFT JOIN journal_voucher_entries AS jve
                 ON jv.id = jve.journal_voucher_id
-            WHERE jv.voucher_type = 'CRV'
+            {where_clause}
             GROUP BY jv.id
             ORDER BY jv.id DESC
+            LIMIT %s OFFSET %s
         """
-        cursor.execute(query)
+        data_values = filter_values + [record_per_page, offset]
+        cursor.execute(data_query, data_values)
         vouchers = cursor.fetchall()
         cursor.close()
 
-        return jsonify(vouchers), 200
+        # ---------------- Pagination Calculation ---------------- #
+        total_pages = math.ceil(total_records / record_per_page) if record_per_page else 1
+        execution_time = time.time() - start_time
+
+        return jsonify({
+            "execution_time": execution_time,
+            "data": vouchers,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 
+
+
 # -------------------- GET BY ID -------------------- #
 @cash_receipt_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_cash_receipt_voucher_by_id(id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql  
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -167,7 +223,12 @@ def get_cash_receipt_voucher_by_id(id):
         entries = cursor.fetchall()
         cursor.close()
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+
         voucher["entries"] = entries
+        voucher["execution_time"] = execution_time
+
         return jsonify(voucher), 200
 
     except Exception as e:
@@ -177,7 +238,10 @@ def get_cash_receipt_voucher_by_id(id):
 
 # -------------------- DELETE -------------------- #
 @cash_receipt_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_cash_receipt_voucher(id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql  
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -194,7 +258,13 @@ def delete_cash_receipt_voucher(id):
         mysql.connection.commit()
         cursor.close()
 
-        return jsonify({"message": "Cash Receipt Voucher deleted successfully"}), 200
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        return jsonify({
+            "message": "Cash Receipt Voucher deleted successfully",
+            "execution_time": execution_time
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -10,6 +10,8 @@ import json
 import random
 import os
 import time
+from routes.authentication.authentication import token_required
+
 
 
 patient_entry_bp = Blueprint('patient_entry', __name__, url_prefix='/api/patient_entry')
@@ -19,8 +21,9 @@ mysql = MySQL()
 
 # ------------------- TODO Create Patient Entry ------------------ #
 @patient_entry_bp.route('/', methods=['POST'])
-# from flask import request, jsonify, current_app
+@token_required
 def create_patient_entry():
+    strat_time = time.time()
     try:
         data = request.get_json()
 
@@ -163,6 +166,7 @@ def create_patient_entry():
 
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "message": "Patient entry created successfully",
@@ -171,7 +175,8 @@ def create_patient_entry():
             "tests": inserted_tests,
             "total_fee": total_fee,
             "discount": discount,
-            "paid": paid
+            "paid": paid, 
+            "execution_time": end_time - start_time
         }), 201
 
     except Exception as e:
@@ -190,9 +195,10 @@ def create_patient_entry():
 #------------------TODO patient cell check if exist-----------------
 
 @patient_entry_bp.route('/cell/<string:cell>', methods=['GET'])
+@token_required
 def cell_patient_check(cell):
-    #d#ata = request.get_json()
-    # cell = data.get("cell")  
+    start_time = time.time()
+    
     
     if not cell:    
         return jsonify({"error": "cell is required"}), 400
@@ -204,9 +210,10 @@ def cell_patient_check(cell):
     cursor.execute(query, (cell,))
     data = cursor.fetchall()
     cursor.close()
+    end_time = time.time()
 
     if data:
-        return jsonify({"data": data,"status": 200}), 200
+        return jsonify({"data": data,"status": 200, "execution_time": end_time - start_time}), 200
     else:
         return jsonify({"message": "No patient found for this cell", "status":404}), 404
 
@@ -215,7 +222,9 @@ def cell_patient_check(cell):
 #-------------------- TODO GET selected test of patient by patient_id -----------------------
 
 @patient_entry_bp.route('/tests/<int:id>/', methods=['GET'])
+@token_required
 def get_patient_tests(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -247,11 +256,13 @@ def get_patient_tests(id):
 
         if not tests:
             return jsonify({"message": "No tests found for this counter"}), 404
+        end_time = time.time()
 
         return jsonify({
             "message": "Patient tests fetched successfully",
             "counter_id": id,
-            "tests": tests
+            "tests": tests,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
@@ -261,7 +272,9 @@ def get_patient_tests(id):
 #------------------ TODO GET patient selected tests parameter by patient_test_id ---
 
 @patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>/<int:counter_id>/<string:test_type>', methods=['GET'])
+@token_required
 def get_test_parameters(test_id, patient_id, counter_id, test_type): 
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -274,7 +287,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         """, (test_id,))
         parameters = cursor.fetchall()
 
-       
+    
         cursor.execute("""
             SELECT parameter_id, result_value,cutoff_value
             FROM patient_results
@@ -317,6 +330,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             updated_parameters.append(param)
 
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "test_id": test_id,
@@ -325,14 +339,18 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             "status"  : status,
             "result_status": result_status,
             "test_type" : test_type,
-            "parameters": updated_parameters
+            "parameters": updated_parameters,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # ---------TODO delete file from file table by id--------
 @patient_entry_bp.route('/delete_file/<int:test_id>/', methods=['DELETE'])
+@token_required
 def delete_file(test_id):
+    start_time = time.time()
+    
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     print("file table ki delete id", test_id)
     cursor.execute("SELECT patient_test_id FROM files WHERE id = %s", (test_id,))
@@ -359,7 +377,8 @@ def delete_file(test_id):
     cursor.execute(query,(test_id,))
     mysql.connection.commit()
     cursor.close()
-    return jsonify({"message": "file is delete successful", "status": 200})
+    end_time = time.time()
+    return jsonify({"message": "file is delete successful", "status": 200, "execution_time": end_time - start_time })
 
 #-------------- TODO Insert file --------------
 UPLOAD_FOLDER = 'static/uploads' 
@@ -367,7 +386,9 @@ ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @patient_entry_bp.route('/file/<int:test_id>', methods=["POST"])
+@token_required
 def insert_file(test_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -410,18 +431,22 @@ def insert_file(test_id):
             
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "message": "file uploaded  successfully",
             "file_path": file_path,
-            "status": 201
+            "status": 201,
+            "execution_time": end_time - start_time
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)})
             
 #-------------------TODO Get files ----------------
 @patient_entry_bp.route('/get_file/<int:test_id>', methods=['GET'])
+@token_required
 def get_files_by(test_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -430,7 +455,8 @@ def get_files_by(test_id):
         cursor.execute(query,(test_id,))
         result = cursor.fetchall()
         print("resutl", result)
-        return jsonify({"data": result, "status": 200})
+        end_time = time.time()
+        return jsonify({"data": result, "status": 200, "execution_time": end_time - start_time})
     except Exception as e:
         return jsonify({"error": str(e)})
     
@@ -440,7 +466,9 @@ def get_files_by(test_id):
 #---------------------TODO Add result of patient selected test parameters by patient_test_id----
 
 @patient_entry_bp.route('/test_results/<int:id>', methods=['POST'])
+@token_required
 def add_or_update_result(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -449,6 +477,8 @@ def add_or_update_result(id):
         parameters = data.get("parameters", [])
         test_profile_id = data.get("test_profile_id")
         comment = data.get("comment")
+        performed_by = data.get("performed_by")
+        
         
         
         cursor.execute("""
@@ -469,7 +499,7 @@ def add_or_update_result(id):
         if not parameters:
             return jsonify({"error": "No parameters provided"}), 400
 
-     
+    
         for res in parameters:
             parameter_id = res.get("parameter_id")
             result_value = res.get("result_value", None)
@@ -495,10 +525,10 @@ def add_or_update_result(id):
                     VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s)
                 """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id, id))
 
-                # comment add update 
+        # comment add update
         cursor.execute("""
                             UPDATE patient_tests
-                            SET comment = %s, result_status=1
+                            SET comment = %s, result_status=1, performed_by = %s, performed_date = NOW()
                             WHERE test_id = %s AND counter_id = %s
                         """, (comment, test_profile_id, id))
         
@@ -506,7 +536,7 @@ def add_or_update_result(id):
         cursor.execute("SELECT COUNT(*) AS total FROM patient_tests WHERE result_status=0 AND counter_id = %s", (id,))
         count = cursor.fetchone()['total']
         if count == 0:
-             cursor.execute("UPDATE counter SET status = 1 WHERE id = %s", (id,))
+            cursor.execute("UPDATE counter SET status = 1 WHERE id = %s", (id,))
 
 
             # ---  Insert into patient_activity_log ---
@@ -524,20 +554,25 @@ def add_or_update_result(id):
         
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "message": "Results saved successfully",
-            "test_profile_id": test_profile_id
+            "test_profile_id": test_profile_id,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-#------------------- TODO Update the test fees --------------
+#------------------- TODO discount approve --------------
 
 @patient_entry_bp.route("/discount_approvel/<int:id>", methods=["PUT"])
+@token_required
 def discount_approvel(id):
+    start_time = time.time()
+    
     try:
         data = request.get_json()
         discount = int(data.get("discount"))
@@ -558,15 +593,21 @@ def discount_approvel(id):
             """, (pt_id_show, id, pt_entry_log))
         
         mysql.connection.commit()
+        end_time = time.time()
 
 
-        return jsonify({"message": "Updated", "discount": discount}), 200
+
+        return jsonify({"message": "Updated", "discount": discount,"execution_time": end_time - start_time
+}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500        
-#----------------TODO Discount Approvel  --------------
+#----------------TODO update fee  --------------
 
 @patient_entry_bp.route("/update_fee/<int:id>", methods=["PUT"])
+@token_required
 def update_fee(id):
+    start_time = time.time()
+
     try:
         data = request.get_json()
         new_paid = int(data.get("paid"))
@@ -596,30 +637,40 @@ def update_fee(id):
             """, (pt_id_show, id, pt_entry_log))
         
         mysql.connection.commit()
+        end_time = time.time()
 
 
-        return jsonify({"message": "Updated", "paid": total_paid,"total": total_fee}), 200
+
+        return jsonify({"message": "Updated", "paid": total_paid,"total": total_fee,"execution_time": end_time - start_time
+}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500        
 
 # ------------------- TODO Get All Patient Entries (Search + Pagination) ------------------ #
 
 @patient_entry_bp.route('/', methods=['GET'])
+@token_required
 def get_all_patient_entries():
     start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
-        
+
+        # 🔹 filters (same)
         patient_name = request.args.get("patient_name", "", type=str)
         mr_number = request.args.get("mr_number", "", type=str)
-        cell = request.args.get("cell", "",type=str)
+        cell = request.args.get("cell", "", type=str)
         from_date = request.args.get("from_date", "", type=str)
         to_date = request.args.get("to_date", "", type=str)
-        
+
+        # 🔹 pagination (added only)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+        offset = (current_page - 1) * record_per_page
+
         filters = []
         params = []
-        
+
         if patient_name:
             filters.append("pt.patient_name LIKE %s")
             params.append(f"%{patient_name}%")
@@ -627,9 +678,11 @@ def get_all_patient_entries():
         if mr_number:
             filters.append("pt.mr_number LIKE %s")
             params.append(f"%{mr_number}%")
+
         if cell:
             filters.append("pt.cell LIKE %s")
             params.append(f"%{cell}%")
+
         if from_date and to_date:
             filters.append("DATE(pt.created_at) BETWEEN %s AND %s")
             params.extend([from_date, to_date])
@@ -641,23 +694,34 @@ def get_all_patient_entries():
             params.append(to_date)
 
         where_clause = "WHERE " + " AND ".join(filters) if filters else ""
-        base_query = (f"""
-        SELECT 
-            c.pt_id AS id,
-            c.id AS cid,
-            c.*,
-            pt.*
-        FROM counter c
-        JOIN patient_entry pt ON c.pt_id = pt.id
-        {where_clause}
-        ORDER BY c.id DESC
-    """)
-        cursor.execute(base_query,params)
+
+        # 🔹 IMPORTANT FIX:
+        # id ko dubara generate nahi kar rahe
+        base_query = f"""
+            SELECT 
+                c.id AS cid,
+                c.pt_id AS id,
+                c.*,
+                pt.*
+            FROM counter c
+            JOIN patient_entry pt ON c.pt_id = pt.id
+            {where_clause}
+        """
+
+        # 🔹 count query (no duplicate id now)
+        count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
+        cursor.execute(count_query, params)
+        total_records = cursor.fetchone()["total"]
+
+        # 🔹 pagination apply
+        paginated_query = base_query + " ORDER BY c.id DESC LIMIT %s OFFSET %s"
+        params_with_pagination = params + [record_per_page, offset]
+
+        cursor.execute(paginated_query, params_with_pagination)
         patient_data_list = cursor.fetchall()
-    
+
+        # 🔹 tests loop (unchanged)
         for patient in patient_data_list:
-            print("patiennt id", patient["id"] )
-            print("counter id", patient["cid"] )
             cursor.execute("""
                 SELECT 
                     pt.id AS patient_test_id, 
@@ -667,25 +731,33 @@ def get_all_patient_entries():
                     tp.fee
                 FROM patient_tests pt
                 JOIN test_profiles tp ON pt.test_id = tp.id
-                WHERE pt.patient_id = %s AND pt.counter_id=%s
-            """, (patient["id"],patient["cid"],))
-            tests = cursor.fetchall()
-            patient["tests"] = tests
+                WHERE pt.patient_id = %s AND pt.counter_id = %s
+            """, (patient["id"], patient["cid"]))
+            patient["tests"] = cursor.fetchall()
+
         end_time = time.time()
+        total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
             "patients": patient_data_list,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page,
             "executionTime": end_time - start_time
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # ------------------- TODO Get Patient Entry by ID ------------------ #
 
 @patient_entry_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def patient_get_by_id(id):
     try:
+        start_time = time.time()
+
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
@@ -732,6 +804,9 @@ def patient_get_by_id(id):
         patient["tests"] = tests
 
         cursor.close()
+        end_time = time.time()
+        patient['execution_time']= end_time - start_time
+
         
         return jsonify([patient]), 200
 
@@ -741,7 +816,9 @@ def patient_get_by_id(id):
 # ------------------- TODo Update Patient Entry by ID ------------------ #
 
 @patient_entry_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_patient_entry(id):
+    start_time = time.time()
     try:
         data = request.get_json()
         mysql = current_app.mysql
@@ -829,10 +906,14 @@ def update_patient_entry(id):
         
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
+
 
         return jsonify({
             "message": "Patient entry aur test_profiles dono update ho gaye",
-            "status": 200
+            "status": 200,
+            "execution_time": end_time - start_time
+
         }), 200
 
     except Exception as e:
@@ -842,7 +923,10 @@ def update_patient_entry(id):
 # ------------------- TODO Delete Patient Entry by ID ------------------ #
 
 @patient_entry_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_patient_entry(id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
@@ -860,8 +944,11 @@ def delete_patient_entry(id):
         #cursor.execute("DELETE FROM patient_entry WHERE id = %s", (patient_id,))
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Patient entry deleted successfully", "status": 200}), 200
+
+        return jsonify({"message": "Patient entry deleted successfully", "status": 200,"execution_time": end_time - start_time
+}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -869,7 +956,10 @@ def delete_patient_entry(id):
 #-------------------------#TODO Test Verify ---------------------------------
 
 @patient_entry_bp.route('/verify_test/<int:test_id>', methods=['PUT'])
+@token_required
 def verify_test(test_id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -908,47 +998,25 @@ def verify_test(test_id):
 
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
+
 
         return jsonify({
             "message": "Status updated successfully",
             "test_id": test_id,
             "counter_id": counter_id,
-            
+            "execution_time": end_time - start_time
+
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
- 
 
-#------------------------------- #TODO GET Unverifyed data --------------------
-
-@patient_entry_bp.route('/unverified_tests', methods=['GET'])
-def get_unverified_tests():
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-        # Optional: filter by patient_id
-        patient_id = request.args.get('patient_id')
-
-        if patient_id:
-            query = "SELECT * FROM patient_tests WHERE patient_id = %s AND status = 'unverified'"
-            cursor.execute(query, (patient_id,))
-        else:
-            query = "SELECT * FROM patient_tests WHERE status = 'unverified'"
-            cursor.execute(query)
-
-        results = cursor.fetchall()
-        cursor.close()
-
-        return jsonify(results), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
     
 #---------------------- #TODO GET patient activiety ------------------
 
 @patient_entry_bp.route('/activity/<int:patient_id>', methods=['GET'])
+@token_required
 def get_patient_activity(patient_id):
     start_time = time.time()
     try:
@@ -982,7 +1050,10 @@ def get_patient_activity(patient_id):
 # ---------------- TODO Patient, tests, counter, activity_log, results all are deleted by counter id ----------------------
 
 @patient_entry_bp.route('/all_delete/<int:id>', methods=['DELETE'])
+@token_required
 def delete_alldata_patient(id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
@@ -1003,114 +1074,12 @@ def delete_alldata_patient(id):
         
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Delete successfully all data of patient", "status": 200}), 200
+
+        return jsonify({"message": "Delete successfully all data of patient", "status": 200,"execution_time": end_time - start_time
+}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-#-------------------GEt all patient activity ------------
-@patient_entry_bp.route("/activity/", methods=["GET"])
-def get_activity():
-    try:
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM patient_activity_log ORDER BY created_at DESC")
-        activities = cursor.fetchall()
-        #activities mn patient id a raha os patient ka name get krna hay 
-        for activity in activities:
-            patient_id = activity['patient_id']
-            cursor.execute("SELECT patient_name, mr_number FROM patient_entry WHERE id = %s", (patient_id,))
-            patient = cursor.fetchone()
-            if patient:
-                activity['patient_name'] = patient['patient_name']
-                activity['mr_number'] = patient['mr_number']
-            else:
-                activity['patient_name'] = None
-                activity['mr_number'] = None
-            
-        cursor.close()
-        return jsonify({"activities": activities, "status": 200})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-#------------------TODO show all patient with just simple listing with name of pt. mr. date. amount their due amount is remain with filter from and due date-------
-@patient_entry_bp.route('/due_patients', methods=['GET'])
-def simple_patient_list():
-    from_date = request.args.get('from_date')
-    to_date = request.args.get('to_date')
-
-    # Step 1: Basic query
-    query = "SELECT * FROM counter WHERE paid < total_fee"
-    params = []
-
-    # Date filters
-    if from_date and to_date:
-        query += " AND DATE(created_at) BETWEEN %s AND %s"
-        params.extend([from_date, to_date])
-    elif from_date:
-        query += " AND DATE(created_at) >= %s"
-        params.append(from_date)
-    elif to_date:
-        query += " AND DATE(created_at) <= %s"
-        params.append(to_date)
-
-    mysql = current_app.mysql
-    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-
-    # Step 2: Fetch due counter records
-    cursor.execute(query, tuple(params))
-    counter_data = cursor.fetchall()
-
-    final_data = []
-
-    # Step 3: Loop — fetch patient data separately
-    for row in counter_data:
-        pt_id = row["pt_id"]
-
-        cursor.execute(
-            "SELECT patient_name, mr_number FROM patient_entry WHERE id = %s",
-            (pt_id,)
-        )
-        patient = cursor.fetchone()
-
-        # Response build
-        final_data.append({
-            "id": row.get("id"),
-            "pt_id": pt_id,
-            "name": patient["patient_name"] if patient else "",
-            "mr_number": patient["mr_number"] if patient else "",
-            "total_fee": row.get("total_fee"),
-            "paid": row.get("paid"),
-            "due_amount": row.get("total_fee") - row.get("paid"),
-        })
-
-    cursor.close()
-
-    return jsonify({"data": final_data, "status": 200})
-
-# -----------------------discount report ------------------------- 
-@patient_entry_bp.route('/discount_report', methods=['GET'])
-def discount_report():
-    from_date = request.args.get('from_date')
-    to_date = request.args.get('to_date')
-
-    query = "SELECT * FROM counter WHERE discount > 0"
-    params = []
-
-    if from_date and to_date:
-        query += " AND DATE(created_at) BETWEEN %s AND %s"
-        params.extend([from_date, to_date])
-    elif from_date:
-        query += " AND DATE(created_at) >= %s"
-        params.append(from_date)
-    elif to_date:
-        query += " AND DATE(created_at) <= %s"
-        params.append(to_date)
-
-    mysql = current_app.mysql
-    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute(query, tuple(params))
-    data = cursor.fetchall()
-    cursor.close()
-
-    return jsonify({"data": data, "status": 200})

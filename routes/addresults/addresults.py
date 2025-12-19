@@ -1,16 +1,19 @@
-
+from routes.authentication.authentication import token_required
 import math
 from flask import Blueprint, request, jsonify,current_app
 from flask_mysqldb import MySQL
 from MySQLdb.cursors import DictCursor
 import MySQLdb
+import time
 
 results_bp = Blueprint('results', __name__, url_prefix='/api/results')
 mysql = MySQL()
 
 # -------------------- Create a new result -------------------- #
 @results_bp.route('/', methods=['POST'])
+@token_required
 def create_result():
+    start_time = time.time()
     try:
         data = request.get_json()
 
@@ -64,6 +67,7 @@ def create_result():
 
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
         return jsonify({
             "message": "Result added successfully",
@@ -73,7 +77,8 @@ def create_result():
             "patient_id": patient_id,
             "date": date,
             "add_results": add_results,
-            "sample": sample
+            "sample": sample,
+            "execution_time_seconds": end_time - start_time
         }), 201
 
     except Exception as e:
@@ -84,7 +89,9 @@ def create_result():
 from MySQLdb.cursors import DictCursor
 
 @results_bp.route('/patient/<int:patient_id>', methods=['GET'])
+@token_required
 def get_patient_results(patient_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -146,8 +153,14 @@ def get_patient_results(patient_id):
                 "result_value": row['result_value']
             })
 
+        # end time is append to final result list 
+        end_time = time.time
+        execution_time_seconds = end_time - start_time
+        
         # ✅ Final response list
         final_results = list(results_dict.values())
+        final_results.append({"execution_time": execution_time_seconds})
+        
 
         return jsonify(final_results), 200
 
@@ -157,7 +170,9 @@ def get_patient_results(patient_id):
 
 # -------------------- Get all results (with search + pagination) -------------------- #
 @results_bp.route('/', methods=['GET'])
+@token_required
 def get_results():
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
@@ -205,12 +220,14 @@ def get_results():
         ]
 
         total_pages = math.ceil(total_records / record_per_page)
+        end_time = time.time()
 
         return jsonify({
             "data": formatted_results,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "execution_time" : end_time - start_time
         }), 200
 
     except Exception as e:
@@ -219,7 +236,9 @@ def get_results():
 
 # -------------------- Get result by ID -------------------- #
 @results_bp.route('/<int:result_id>', methods=['GET'])
+@token_required
 def get_result_by_id(result_id):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(dictionary=True)
         cursor.execute("SELECT * FROM results WHERE id = %s", (result_id,))
@@ -231,6 +250,9 @@ def get_result_by_id(result_id):
 
         if row["date"]:
             row["date"] = row["date"].strftime("%Y-%m-%d")
+            end_time = time.time()
+            execution_time_seconds = end_time - start_time
+            row.append({"execution_time": execution_time_seconds})
 
         return jsonify(row), 200
 
@@ -240,7 +262,9 @@ def get_result_by_id(result_id):
 
 # -------------------- Update result -------------------- #
 @results_bp.route('/<int:result_id>', methods=['PUT'])
+@token_required
 def update_result(result_id):
+    start_time = time.time()
     try:
         data = request.get_json()
         name = data.get("name")
@@ -263,8 +287,10 @@ def update_result(result_id):
         cursor.execute(update_query, (name, mr, date, add_results, sample, result_id))
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Result updated successfully"}), 200
+        return jsonify({"message": "Result updated successfully",
+                        "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -272,7 +298,9 @@ def update_result(result_id):
 
 # -------------------- Delete result -------------------- #
 @results_bp.route('/<int:result_id>', methods=['DELETE'])
+@token_required
 def delete_result(result_id):
+    strat_time = time.time()
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT * FROM results WHERE id = %s", (result_id,))
@@ -283,14 +311,18 @@ def delete_result(result_id):
         cursor.execute("DELETE FROM results WHERE id = %s", (result_id,))
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Result deleted successfully"}), 200
+        return jsonify({"message": "Result deleted successfully",
+                        "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # -------------------- Get only pending results (no add_results) -------------------- #
 @results_bp.route('/pending', methods=['GET'])
+@token_required
 def get_pending_results():
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
@@ -319,6 +351,7 @@ def get_pending_results():
         cursor.execute(base_query, values)
         pending_results = cursor.fetchall()
         cursor.close()
+        
 
         formatted = [
             {
@@ -333,12 +366,14 @@ def get_pending_results():
         ]
 
         total_pages = math.ceil(total_records / record_per_page)
+        end_time = time.time()
 
         return jsonify({
             "data": formatted,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "execution_time":end_time - start_time
         }), 200
 
     except Exception as e:
@@ -433,7 +468,9 @@ def get_pending_results():
 
 #-------------- GET patient all test their result add or not -----------
 @results_bp.route('/patient_results/<int:patient_id>', methods=['GET'])
+@token_required
 def get_patient_tests_with_results(patient_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -472,12 +509,15 @@ def get_patient_tests_with_results(patient_id):
             """, (patient_test_id, test_id, test_id))
 
             parameters = cursor.fetchall()
+            end_time = time.time()
 
             response.append({
                 "patient_test_id": patient_test_id,
                 "test_id": test_id,
                 "test_name": test['test_name'],
-                "parameters": parameters
+                "parameters": parameters,
+                "execution_time":end_time -start_time
+                
             })
 
         cursor.close()

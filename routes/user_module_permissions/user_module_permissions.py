@@ -1,10 +1,14 @@
 from flask import Blueprint, jsonify, current_app,request
 from MySQLdb.cursors import DictCursor
+import time
+from routes.authentication.authentication import token_required
 
 permission_bp = Blueprint('permission', __name__, url_prefix='/api/permission')
 
 @permission_bp.route('/', methods=['GET'])
+@token_required
 def get_all_permissions():
+    start_time = time.time()
     try:
         # Database connection
         conn = current_app.mysql.connection
@@ -32,16 +36,22 @@ def get_all_permissions():
                 }
             })
             
+        end_time = time.time()
+        execution_time = end_time - start_time
 
         return jsonify({
             "module":result,
-            "status": 200}), 200
+            "status": 200,
+            "execution_time": execution_time
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # ---------------- UPDATE PERMISSIONS BY USERID ---------------- #
 @permission_bp.route('/', methods=['PUT'])
+@token_required
 def update_permissions():
+    start_time = time.time()
     try:
         conn = current_app.mysql.connection
         cursor = conn.cursor()
@@ -75,9 +85,12 @@ def update_permissions():
 
         conn.commit()
         cursor.close()
+        end_time = time.time()
+        execution_time = end_time - start_time
 
         return jsonify({"message": "Permissions updated successfully..............",
-                        "status": 200}), 200
+                        "status": 200,
+                        "execution_time": execution_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
