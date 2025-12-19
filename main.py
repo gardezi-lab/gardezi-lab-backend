@@ -39,7 +39,12 @@ from routes.account_book.stock_usage.stock_usage import stock_usage_bp
 from routes.account_book.inventory.inventory import inventory_bp
 from routes.collectioncenter.collectioncenter import collectioncenter_bp
 from routes.lab.lab import lab_bp
-
+from routes.reporting.reporting import reporting_bp
+from routes.dashboard.dashboard import dashboard_bp
+from routes.invoicepdf.invoicepdf import invoicepdf_bp
+from routes.balance_sheet.balance_sheet import balance_sheet_report_bp
+from routes.trial_balance.trial_balance import trial_balance_report_bp
+from routes.stock_usage_report.stock_usage_report import stock_usage_report_bp
 # Load .env variables
 load_dotenv()
 app = Flask(__name__)
@@ -118,6 +123,11 @@ app.register_blueprint(authentication_bp)
 app.register_blueprint(permission_bp)
 app.register_blueprint(collectioncenter_bp)
 app.register_blueprint(lab_bp)
+app.register_blueprint(reporting_bp)
+app.register_blueprint(invoicepdf_bp)
+app.register_blueprint(balance_sheet_report_bp)
+app.register_blueprint(trial_balance_report_bp)
+app.register_blueprint(stock_usage_report_bp)
 #main
 
 # ---------- Account Book Blueprints ----------
@@ -133,6 +143,7 @@ app.register_blueprint(stock_items_bp)
 app.register_blueprint(stock_purchase_bp)
 app.register_blueprint(stock_usage_bp)
 app.register_blueprint(inventory_bp)
+app.register_blueprint(dashboard_bp)
 
 # ---------- Run App ----------
 if __name__ == "__main__":

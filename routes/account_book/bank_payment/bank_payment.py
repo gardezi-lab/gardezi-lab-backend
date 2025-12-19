@@ -1,15 +1,18 @@
 import MySQLdb.cursors
 from flask import Blueprint, jsonify, request, current_app
+from routes.authentication.authentication import token_required
 from flask_mysqldb import MySQL
+import time
 
-# -------------------- BLUEPRINT SETUP -------------------- #
 bank_payment_bp = Blueprint('bank_payment', __name__, url_prefix='/api/bank_payment_voucher')
 mysql = MySQL()
 
 
 # -------------------- CREATE (POST) -------------------- #
 @bank_payment_bp.route('/', methods=['POST'])
+@token_required
 def create_bank_payment_voucher():
+    start_time = time.time()
     try:
         mysql = current_app.mysql  
         data = request.get_json()
@@ -19,7 +22,6 @@ def create_bank_payment_voucher():
         voucher_type = data.get('voucher_type', 'BPV')
         entries = data.get('entries')
 
-        # ---- Basic validation ----
         if not date or not narration:
             return jsonify({"error": "Date and narration are required"}), 400
         if not entries or not isinstance(entries, list):
@@ -28,7 +30,6 @@ def create_bank_payment_voucher():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Generate next listing_voucher ----
         cursor.execute("""
             SELECT listing_voucher 
             FROM journal_voucher 
@@ -48,21 +49,18 @@ def create_bank_payment_voucher():
 
         listing_voucher = f"{voucher_type}-{last_number + 1:03d}"
 
-        # ---- Insert main voucher record ----
         cursor.execute("""
             INSERT INTO journal_voucher (date, narration, voucher_type, listing_voucher)
             VALUES (%s, %s, %s, %s)
         """, (date, narration, voucher_type, listing_voucher))
         voucher_id = cursor.lastrowid
 
-        # ---- Get default bank account ----
         cursor.execute("SELECT default_bank FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
         if not record or not record['default_bank']:
             return jsonify({"error": "Default bank account not set in account_setting"}), 500
         default_bank_id = record['default_bank']
 
-        # ---- Insert all debit entries (BPV adds DR side) ----
         total_dr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -79,7 +77,6 @@ def create_bank_payment_voucher():
                 VALUES (%s, %s, %s, %s)
             """, (voucher_id, account_head_id, dr, cr))
 
-        # ---- Insert default bank account (credit entry) ----
         cursor.execute("""
             INSERT INTO journal_voucher_entries 
             (journal_voucher_id, account_head_id, dr, cr)
@@ -89,20 +86,26 @@ def create_bank_payment_voucher():
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()
+
         return jsonify({
             "message": "Bank Payment Voucher created successfully",
             "voucher_id": voucher_id,
             "listing_voucher": listing_voucher,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "time_calculated": end_time - start_time
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+
 # -------------------- GET ALL -------------------- #
 @bank_payment_bp.route('/', methods=['GET'])
+@token_required
 def get_all_bank_payment_vouchers():
+    start_time = time.time()
     try:
         mysql = current_app.mysql  
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -126,15 +129,23 @@ def get_all_bank_payment_vouchers():
         vouchers = cursor.fetchall()
         cursor.close()
 
-        return jsonify(vouchers), 200
+        end_time = time.time()
+
+        return jsonify({
+            "data": vouchers,
+            "time_calculated": end_time - start_time
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+
 # -------------------- GET BY ID -------------------- #
 @bank_payment_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_bank_payment_voucher_by_id(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql  
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -165,15 +176,24 @@ def get_bank_payment_voucher_by_id(id):
         cursor.close()
 
         voucher["entries"] = entries
-        return jsonify(voucher), 200
+
+        end_time = time.time()
+
+        return jsonify({
+            "data": voucher,
+            "time_calculated": end_time - start_time
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+
 # -------------------- DELETE -------------------- #
 @bank_payment_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_bank_payment_voucher(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql  
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -190,19 +210,23 @@ def delete_bank_payment_voucher(id):
         mysql.connection.commit()
         cursor.close()
 
-        return jsonify({"message": "Bank Payment Voucher deleted successfully"}), 200
+        end_time = time.time()
+
+        return jsonify({
+            "message": "Bank Payment Voucher deleted successfully",
+            "time_calculated": end_time - start_time
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 
 
 # -------------------- UPDATE (PUT) -------------------- #
 @bank_payment_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_bank_payment_voucher(id):
-    """
-    Update an existing Bank Payment Voucher (BPV)
-    """
+    start_time = time.time()
     try:
         mysql = current_app.mysql  
         data = request.get_json()
@@ -212,7 +236,6 @@ def update_bank_payment_voucher(id):
         voucher_type = data.get('voucher_type', 'BPV')
         entries = data.get('entries')
 
-        # ---- Validation ----
         if not date or not narration:
             return jsonify({"error": "Date and narration are required"}), 400
 
@@ -222,23 +245,20 @@ def update_bank_payment_voucher(id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Check if the voucher exists ----
-        cursor.execute("SELECT * FROM journal_voucher WHERE id = %s AND voucher_type = %s", (id, voucher_type))
+        cursor.execute("SELECT * FROM journal_voucher WHERE id = %s AND voucher_type = %s",
+                       (id, voucher_type))
         voucher = cursor.fetchone()
 
         if not voucher:
             cursor.close()
             return jsonify({"message": "Bank Payment Voucher not found"}), 404
 
-        # ---- Update main voucher record ----
         cursor.execute("""
             UPDATE journal_voucher
             SET date = %s, narration = %s, voucher_type = %s
             WHERE id = %s
         """, (date, narration, voucher_type, id))
 
-     
-        # ---- Get default bank account ----
         cursor.execute("SELECT default_bank FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
 
@@ -247,7 +267,6 @@ def update_bank_payment_voucher(id):
 
         default_bank_id = record['default_bank']
 
-        # ---- Reinsert all debit entries ----
         total_dr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -264,7 +283,6 @@ def update_bank_payment_voucher(id):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert default bank account (credit entry) ----
         cursor.execute("""
             INSERT INTO journal_voucher_entries 
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -274,10 +292,13 @@ def update_bank_payment_voucher(id):
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()
+
         return jsonify({
             "message": "Bank Payment Voucher updated successfully",
             "voucher_id": id,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "time_calculated": end_time - start_time
         }), 200
 
     except Exception as e:

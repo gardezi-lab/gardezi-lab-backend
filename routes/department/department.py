@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
+from routes.authentication.authentication import token_required
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
 import math
@@ -10,6 +11,7 @@ mysql = MySQL()
 
 # ---------------- Department GET ------------------- #
 @department_bp.route('/', methods=['GET'])
+@token_required
 def get_departments_optimized():
     start_time = time.time()
     try:
@@ -65,7 +67,9 @@ def get_departments_optimized():
 
 # ---------------- Department Create ------------------- #
 @department_bp.route('/', methods=['POST'])
+@token_required
 def create_department():
+    start_time = time.time()
     try:
         data = request.get_json(force=False)
         if not data:
@@ -88,15 +92,19 @@ def create_department():
         cursor.execute("INSERT INTO departments (department_name) VALUES (%s)", (department_name,))
         mysql.connection.commit() # type: ignore
         cursor.close()
+        end_time = time.time()
         return jsonify({"message": "Department created successfully",
-                        "status": 201}), 201
+                        "status": 201,
+                        "execution_time": end_time - start_time}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # ---------------- Department Update ------------------- #
 @department_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_department(id):
+    start_time = time.time()
     try:
         data = request.get_json()
         department_name = data.get('department_name')
@@ -115,15 +123,19 @@ def update_department(id):
         cursor.execute("UPDATE departments SET department_name=%s WHERE id=%s", (department_name, id))
         mysql.connection.commit() # type: ignore
         cursor.close()
+        end_time = time.time()
         return jsonify({"message": "Department updated successfully",
-                        "status": 200}), 200
+                        "status": 200,
+                        "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # ---------------- Department Delete ------------------- #
 @department_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_department(id):
+    start_time = time.time()
     try:
         #if department id is not in database then return error
         cursor = mysql.connection.cursor() # type: ignore
@@ -136,15 +148,19 @@ def delete_department(id):
         cursor.execute("DELETE FROM departments WHERE id=%s", (id,))
         mysql.connection.commit() # type: ignore
         cursor.close()
+        end_time = time.time()
         return jsonify({"message": "Department deleted successfully",
-                        "status" : 200}), 200
+                        "status" : 200,
+                        "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # ---------------- Department Get by ID ------------------- #
 @department_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_department_by_id(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor()
@@ -158,6 +174,9 @@ def get_department_by_id(id):
                 "department_name": result[1],
                 "status": 200
             }
+            end_time = time.time()
+            # now execution_time append to department
+            department['execution_time'] = end_time - start_time
             return jsonify(department), 200
         else:
             return jsonify({"message": "Department not found"}), 404
@@ -167,7 +186,9 @@ def get_department_by_id(id):
 
 # ---------------- Department Search by Name ------------------- #
 @department_bp.route('/search/<string:name>', methods=['GET'])
+@token_required
 def search_departments(name):
+    start_time = time.time()
     try:
         mysql = current_app.mysql # type: ignore
         cursor = mysql.connection.cursor()
@@ -179,11 +200,13 @@ def search_departments(name):
 
         if not result:
             return jsonify({"message": "No departments found"}), 404
+        end_time = time.time()
 
         return jsonify({
             "id": result[0],
             "department": result[1],
-            "status": 200
+            "status": 200,
+            "execution_time": end_time - start_time
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -3,6 +3,8 @@ from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
 import MySQLdb
 import time
+from routes.authentication.authentication import token_required
+
 
 
 # Blueprint with API prefix
@@ -21,7 +23,9 @@ def validate_interpretation_data(data, is_update=False):
 
 # -------------------- CREATE -------------------- #
 @interpretation_bp.route("/", methods=["POST"])
+@token_required
 def create_interpretation():
+    start_time = time.time()
     try:
 
         mysql = current_app.mysql
@@ -37,14 +41,17 @@ def create_interpretation():
         )
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Interpretation created successfully"}), 201
+        return jsonify({"message": "Interpretation created successfully",
+                        "execution_time": end_time - start_time}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
 
 # -------------------- GET with Search + Pagination -------------------- #
 @interpretation_bp.route("/", methods=["GET"])
+@token_required
 def get_interpretations():
     start_time = time.time()
     try:
@@ -100,7 +107,9 @@ def get_interpretations():
 
 # -------------------- GET by ID -------------------- #
 @interpretation_bp.route("/<int:id>", methods=["GET"])
+@token_required
 def get_interpretation_by_id(id):
+    strat_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -110,7 +119,9 @@ def get_interpretation_by_id(id):
 
         if not interpretation:
             return jsonify({"error": "Interpretation not found"}), 404
+        end_time = time.time()
 
+        interpretation['execution_time'] = end_time - strat_time
         return jsonify(interpretation), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -118,7 +129,9 @@ def get_interpretation_by_id(id):
 
 # -------------------- UPDATE -------------------- #
 @interpretation_bp.route("/<int:id>", methods=["PUT"])
+@token_required
 def update_interpretation(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         data = request.get_json()
@@ -134,7 +147,10 @@ def update_interpretation(id):
             return jsonify({"error": "Interpretation not found"}), 404
 
         cur.close()
-        return jsonify({"message": "Interpretation updated","status": 200})
+        end_time = time.time()
+        
+        return jsonify({"message": "Interpretation updated","status": 200,
+                        "execution_time": end_time - start_time})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
@@ -142,7 +158,9 @@ def update_interpretation(id):
 
 # -------------------- DELETE -------------------- #
 @interpretation_bp.route("/<int:id>", methods=["DELETE"])
+@token_required
 def delete_interpretation(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
@@ -153,8 +171,9 @@ def delete_interpretation(id):
 
         if deleted_rows == 0:
             return jsonify({"error": "Interpretation not found"}), 404
+        end_time = time.time()
 
-        return jsonify({"message": "Interpretation deleted successfully","status":200}), 200
+        return jsonify({"message": "Interpretation deleted successfully","status":200,"execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     

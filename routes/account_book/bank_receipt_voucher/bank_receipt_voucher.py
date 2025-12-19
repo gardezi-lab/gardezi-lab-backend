@@ -1,6 +1,8 @@
 import MySQLdb.cursors
 from flask import Blueprint, jsonify, request, current_app
+from routes.authentication.authentication import token_required
 from flask_mysqldb import MySQL
+import time   # <-- added
 
 # Blueprint setup
 bank_receipt_voucher_bp = Blueprint('bank_receipt_voucher', __name__, url_prefix='/api/bank_receipt_voucher')
@@ -8,10 +10,10 @@ mysql = MySQL()
 
 # -------------------- CREATE (POST) -------------------- #
 @bank_receipt_voucher_bp.route('/', methods=['POST'])
+@token_required
 def create_bank_receipt_voucher():
-    """
-    Create a new Bank Receipt Voucher (BRV)
-    """
+    start_time = time.time()   
+
     try:
         mysql = current_app.mysql
         data = request.get_json()
@@ -80,14 +82,13 @@ def create_bank_receipt_voucher():
                 cursor.close()
                 return jsonify({"error": "Each entry must have account_head_id"}), 400
 
-            # Insert each entry
             cursor.execute("""
                 INSERT INTO journal_voucher_entries
                 (journal_voucher_id, account_head_id, dr, cr, type, date)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (voucher_id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert the default bank account entry (Dr entry) ----
+        # ---- Insert default bank Dr ----
         cursor.execute("""
             INSERT INTO journal_voucher_entries
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -97,13 +98,17 @@ def create_bank_receipt_voucher():
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()   
+        execution_time = end_time - start_time   
+
         return jsonify({
             "message": "Bank Receipt Voucher created successfully",
             "voucher_id": voucher_id,
             "listing_voucher": listing_voucher,
             "voucher_type": voucher_type,
             "date": date,
-            "type": voucher_type
+            "type": voucher_type,
+            "execution_time": execution_time
         }), 201
 
     except Exception as e:
@@ -111,13 +116,12 @@ def create_bank_receipt_voucher():
 
 
 
-
 # -------------------- UPDATE (PUT) -------------------- #
 @bank_receipt_voucher_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_cash_receipt_voucher(id):
-    """
-    Update an existing Cash Receipt Voucher (CRV)
-    """
+    start_time = time.time()   
+
     try:
         mysql = current_app.mysql
         data = request.get_json()
@@ -127,7 +131,6 @@ def update_cash_receipt_voucher(id):
         voucher_type = data.get('voucher_type', 'CRV')
         entries = data.get('entries')
 
-        # ---- Validation ----
         if not date or not narration:
             return jsonify({"error": "Date and narration are required"}), 400
 
@@ -137,24 +140,20 @@ def update_cash_receipt_voucher(id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Check if voucher exists ----
         cursor.execute("SELECT * FROM journal_voucher WHERE id = %s", (id,))
         voucher = cursor.fetchone()
         if not voucher:
             cursor.close()
             return jsonify({"message": "Cash Receipt Voucher not found"}), 404
 
-        # ---- Update main voucher record ----
         cursor.execute("""
             UPDATE journal_voucher
             SET date = %s, narration = %s, voucher_type = %s
             WHERE id = %s
         """, (date, narration, voucher_type, id))
 
-        # ---- Remove all existing entries before re-inserting ----
         cursor.execute("DELETE FROM journal_voucher_entries WHERE journal_voucher_id = %s", (id,))
 
-        # ---- Get default cash account ----
         cursor.execute("SELECT default_cash FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
 
@@ -163,7 +162,6 @@ def update_cash_receipt_voucher(id):
 
         default_cash_id = record['default_cash']
 
-        # ---- Insert updated credit entries ----
         total_cr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -180,7 +178,6 @@ def update_cash_receipt_voucher(id):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert the default cash account (Dr entry) ----
         cursor.execute("""
             INSERT INTO journal_voucher_entries
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -190,10 +187,14 @@ def update_cash_receipt_voucher(id):
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()     
+        execution_time = end_time - start_time
+
         return jsonify({
             "message": "Cash Receipt Voucher updated successfully",
             "voucher_id": id,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "execution_time": execution_time
         }), 200
 
     except Exception as e:
@@ -201,14 +202,12 @@ def update_cash_receipt_voucher(id):
 
 
 
-
-
 # -------------------- UPDATE (PUT) -------------------- #
 @bank_receipt_voucher_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_bank_receipt_voucher(id):
-    """
-    Update an existing Bank Receipt Voucher (BRV)
-    """
+    start_time = time.time()   
+
     try:
         mysql = current_app.mysql
         data = request.get_json()
@@ -218,7 +217,6 @@ def update_bank_receipt_voucher(id):
         voucher_type = data.get('voucher_type', 'BRV')
         entries = data.get('entries')
 
-        # ---- Validation ----
         if not date or not narration:
             return jsonify({"error": "Date and narration are required"}), 400
 
@@ -228,23 +226,18 @@ def update_bank_receipt_voucher(id):
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         voucher_type = voucher_type.upper()
 
-        # ---- Check if voucher exists ----
         cursor.execute("SELECT * FROM journal_voucher WHERE id = %s", (id,))
         voucher = cursor.fetchone()
         if not voucher:
             cursor.close()
             return jsonify({"message": "Bank Receipt Voucher not found"}), 404
 
-        # ---- Update main voucher record ----
         cursor.execute("""
             UPDATE journal_voucher
             SET date = %s, narration = %s, voucher_type = %s
             WHERE id = %s
         """, (date, narration, voucher_type, id))
 
-      
-
-        # ---- Get default bank account ----
         cursor.execute("SELECT default_bank FROM account_setting WHERE id = 1")
         record = cursor.fetchone()
 
@@ -253,7 +246,6 @@ def update_bank_receipt_voucher(id):
 
         default_bank_id = record['default_bank']
 
-        # ---- Insert updated credit entries ----
         total_cr = 0
         for entry in entries:
             account_head_id = entry.get('account_head_id')
@@ -270,7 +262,6 @@ def update_bank_receipt_voucher(id):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (id, account_head_id, dr, cr, voucher_type, date))
 
-        # ---- Insert the default bank account ----
         cursor.execute("""
             INSERT INTO journal_voucher_entries
             (journal_voucher_id, account_head_id, dr, cr, type, date)
@@ -280,10 +271,14 @@ def update_bank_receipt_voucher(id):
         mysql.connection.commit()
         cursor.close()
 
+        end_time = time.time()    
+        execution_time = end_time - start_time
+
         return jsonify({
             "message": "Bank Receipt Voucher updated successfully",
             "voucher_id": id,
-            "voucher_type": voucher_type
+            "voucher_type": voucher_type,
+            "execution_time": execution_time
         }), 200
 
     except Exception as e:

@@ -2,6 +2,9 @@ import math
 from flask import Blueprint, request, jsonify, current_app
 import MySQLdb.cursors
 from flask_mysqldb import MySQL
+import time
+from routes.authentication.authentication import token_required
+
 
 companies_panel_bp = Blueprint('companies_panel', __name__, url_prefix='/api/companies_panel')
 mysql = MySQL()
@@ -10,22 +13,31 @@ mysql = MySQL()
 
 # --------------------- Companies Panel GET with Search + Pagination -------------------
 @companies_panel_bp.route('/', methods=['GET'])
+@token_required
 def get_companies_panels():
     start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # query params
-        patient_name = request.args.get("company_name", "", type=str)
+        # 🔹 Query params
+        company_name = request.args.get("company_name", "", type=str)
         from_date = request.args.get("from_date", "", type=str)
         to_date = request.args.get("to_date", "", type=str)
-        
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 10, type=int)
+
+        offset = (current_page - 1) * record_per_page
+
         filters = []
         params = []
-        if patient_name:
+
+        # 🔹 Search filter
+        if company_name:
             filters.append("company_name LIKE %s")
             params.append(f"%{company_name}%")
+
+        # 🔹 Date filters
         if from_date and to_date:
             filters.append("DATE(created_at) BETWEEN %s AND %s")
             params.extend([from_date, to_date])
@@ -35,28 +47,46 @@ def get_companies_panels():
         elif to_date:
             filters.append("DATE(created_at) <= %s")
             params.append(to_date)
-            
+
         where_clause = "WHERE " + " AND ".join(filters) if filters else ""
-        
-        # base query
+
+        # 🔹 Base query
         base_query = f"SELECT * FROM companies_panel {where_clause}"
-        
-        cursor.execute(base_query,params)
+
+        # 🔹 Count total records
+        count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
+        cursor.execute(count_query, params)
+        total_records = cursor.fetchone()["total"]
+
+        # 🔹 Pagination + order
+        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        params.extend([record_per_page, offset])
+
+        cursor.execute(base_query, params)
         company_panel = cursor.fetchall()
+
         end_time = time.time()
-        
+        total_pages = math.ceil(total_records / record_per_page)
+
         return jsonify({
             "data": company_panel,
-            "status": 200,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page,
             "executionTime": end_time - start_time
         }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+
 # --------------------- Companies Panel Create -------------------
 @companies_panel_bp.route('/', methods=['POST'])
+@token_required
 def create_companies_panel():
+    start_time = time.time()
+    
     data = request.get_json()
     company_name = data.get('company_name')
     head_name = data.get('head_name')
@@ -73,15 +103,20 @@ def create_companies_panel():
             (company_name, head_name, contact_no, user_name, age)
         )
         mysql.connection.commit()
+        end_time = time.time()
         return jsonify({"message": "Companies panel created successfully",
-                        "status": 201}), 201
+                        "status": 201,
+                        "execution_time": end_time - start_time}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # --------------------- Companies Panel Update -------------------
 @companies_panel_bp.route('/<int:id>', methods=['PUT'])
+@token_required
 def update_companies_panel(id):
+    start_time = time.time()
+    
     data = request.get_json()
     company_name = data.get('company_name')
     head_name = data.get('head_name')
@@ -112,8 +147,11 @@ def update_companies_panel(id):
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
+        end_time = time.time()
+        
         return jsonify({"message": "Companies panel updated successfully",
-                        "status": 200
+                        "status": 200,
+                        "exection_time": end_time - start_time
                         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -121,7 +159,9 @@ def update_companies_panel(id):
 
 # --------------------- Companies Panel Delete -------------------
 @companies_panel_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
 def delete_companies_panel(id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
@@ -129,14 +169,19 @@ def delete_companies_panel(id):
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
+        end_time = time.time()
         return jsonify({"message": "Companies panel deleted successfully",
-                        "status": 200}), 200
+                        "status": 200,
+                        "execution_time" : end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
 # --------------------- Companies Panel get by id -------------------
 @companies_panel_bp.route('/<int:id>', methods=['GET'])
+@token_required
 def get_companies_panel(id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
@@ -145,16 +190,22 @@ def get_companies_panel(id):
         result = cursor.fetchone()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404
+        end_time = time.time()
+
         return jsonify({"message": "Companies panel get successfully",
                         "status": 200,
-                        "result": result}), 200
+                        "result": result,
+                        "execution_time" : end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # --------------------- Companies Panel Get by ID with patient data -------------------
 @companies_panel_bp.route('/company/<int:id>', methods=['GET'])
+@token_required
 def get_companies_panel_by_id(id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -192,11 +243,13 @@ def get_companies_panel_by_id(id):
             if patient:
                 patient['total_fee'] = total_fee
                 patients.append(patient)
+            end_time = time.time()
+
             
 
         return jsonify({
             "company": company,
-            
+            "execution_time" : end_time - start_time,
             "patients": patients
         }), 200
 
@@ -204,7 +257,9 @@ def get_companies_panel_by_id(id):
         return jsonify({"error": str(e)}), 500
 #-------------------------Company Search by Head Name-------------------
 @companies_panel_bp.route('/search/<string:head_name>', methods=['GET'])
+@token_required
 def search_companies_panel_by_head_name(head_name):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
@@ -221,6 +276,11 @@ def search_companies_panel_by_head_name(head_name):
                 "age": row[5],
                 "status": 200
             })
+        end_time = time.time()
+        # now execution time append to companies_panel
+        for company in companies_panels:
+            company['execution_time'] = end_time - start_time
+
         return jsonify(companies_panels), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

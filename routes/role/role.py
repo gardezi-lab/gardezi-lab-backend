@@ -3,6 +3,8 @@ from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
 import time
+from routes.authentication.authentication import token_required
+
 
 role_bp = Blueprint('role', __name__, url_prefix='/api/role')
 mysql = MySQL()
@@ -11,6 +13,7 @@ mysql = MySQL()
 
 # --------------------- Get all roles (Search + Pagination) --------------------- #
 @role_bp.route('/', methods=['GET'])
+@token_required
 def get_roles():
     start_time = time.time()
     try:
@@ -21,7 +24,7 @@ def get_roles():
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
-
+ 
         offset = (current_page - 1) * record_per_page
 
         # Base query
@@ -67,17 +70,24 @@ def get_roles():
 
 # --------------------- Get role by ID --------------------- #
 @role_bp.route('/<int:role_id>', methods=['GET'])
+@token_required
 def get_role(role_id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor(DictCursor)
         cur.execute("SELECT * FROM roles WHERE id = %s", (role_id,))
         role = cur.fetchone()
         cur.close()
+        end_time = time.time()
+
         if role:
             return jsonify({
                 "data" : role,
-                "status" :200 }), 200
+                "status" :200,
+                "execution_time": end_time - start_time
+            }), 200
         else:
             return jsonify({"error": "Role not found"}), 404
     except Exception as e:
@@ -86,7 +96,10 @@ def get_role(role_id):
 
 # --------------------- Create a new role --------------------- #
 @role_bp.route('/', methods=['POST'])
+@token_required
 def create_role():
+    start_time = time.time()
+
     try:
         data = request.get_json()
         role_name = data.get("role_name")
@@ -100,15 +113,21 @@ def create_role():
         cur.execute("INSERT INTO roles (role_name) VALUES (%s)", (role_name,))
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
+
         return jsonify({"message": "Role created successfully",
-                        "status" : 201}), 201
+                        "status" : 201,
+                        "execution_time": end_time - start_time}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # --------------------- Update an existing role --------------------- #
 @role_bp.route('/<int:role_id>', methods=['PUT'])
+@token_required
 def update_role(role_id):
+    start_time = time.time()
+
     try:
         data = request.get_json()
         role_name = data.get("role_name")
@@ -134,29 +153,41 @@ def update_role(role_id):
         cur.execute("UPDATE roles SET role_name = %s WHERE id = %s", (role_name, role_id))
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
+
         return jsonify({"message": "Role updated successfully",
-                        "status" : 200}), 200
+                        "status" : 200,
+                        "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # --------------------- Delete a role --------------------- #
 @role_bp.route('/<int:role_id>', methods=['DELETE'])
+@token_required
 def delete_role(role_id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
         cur.execute("DELETE FROM roles WHERE id = %s", (role_id,))
         mysql.connection.commit()
         cur.close()
+        end_time = time.time()
+
         return jsonify({"message": "Role deleted successfully",
-                        "status" : 200}), 200
+                        "status" : 200,
+                        "execution_time": end_time - start_time}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
 #--------------------Search Role by name---------------------#
 @role_bp.route('/search/<string:role_name>', methods=['GET'])
+@token_required
 def search_role(role_name):
+    start_time = time.time()
+
     try:
         cur = mysql.connection.cursor()
         cur.execute(
@@ -176,6 +207,9 @@ def search_role(role_name):
 
         if not roles:
             return jsonify({"message": "No roles found"}), 404
+        end_time = time.time()
+        roles.append({"execution_time": end_time - start_time})
+
 
         return jsonify(roles), 200
     except Exception as e:
@@ -184,7 +218,10 @@ def search_role(role_name):
 
 # ---------------------- UPDATE ROLE PERMISSIONS (ADMIN ONLY) ---------------------- 
 @role_bp.route('/update_permission/<int:id>', methods=['PUT'])
+@token_required
 def update_role_permissions(id):
+    start_time = time.time()
+
     data = request.get_json()
     module_name = data.get('module')
     
@@ -209,6 +246,8 @@ def update_role_permissions(id):
             return jsonify({"message": f"Role ID {id} not found."}), 404
 
         current_app.mysql.connection.commit()
+        end_time = time.time()
+
         
     except Exception as e:
         current_app.mysql.connection.rollback()
@@ -216,15 +255,21 @@ def update_role_permissions(id):
     finally:
         cursor.close()
 
-    return jsonify({"message": "update successfuly..", "id": id})
+    return jsonify({"message": "update successfuly..", "id": id,"execution_time": end_time - start_time
+})
 
 
 # ---------------------- GET ALL PERMISSIONS (ADMIN ONLY) ---------------------- #
 @role_bp.route('/role_get', methods=['GET'])
+@token_required
 def get_all_permissions():
+    start_time = time.time()
+
     cursor = current_app.mysql.connection.cursor(DictCursor)
     cursor.execute("SELECT * FROM role_management")
     data = cursor.fetchall()
     cursor.close()
+    end_time = time.time()
+    data.append({"execution_time": end_time - start_time})
     return jsonify(data), 200
 

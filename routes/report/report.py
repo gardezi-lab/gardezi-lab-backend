@@ -5,12 +5,14 @@ import base64
 from io import BytesIO
 from datetime import datetime
 import MySQLdb.cursors
+from routes.authentication.authentication import token_required
 
 report_bp = Blueprint('report', __name__, url_prefix='/api/report')
 mysql = MySQL()
 
 # ------------------ Report API -------------------
 @report_bp.route('/<int:id>', methods=['POST'])
+@token_required
 def generate_report(id):
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -111,6 +113,7 @@ def generate_report(id):
             cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
             resulttest = cursor.fetchone()
             intprid = resulttest['interpretation']
+            detaildetail = ""
             if intprid:
                 cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
                 resulttest = cursor.fetchone()

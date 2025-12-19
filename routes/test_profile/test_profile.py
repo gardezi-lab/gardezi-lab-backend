@@ -2,6 +2,8 @@ import math
 from flask import Blueprint, request, jsonify, current_app
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL
+import time
+from routes.authentication.authentication import token_required
 
 test_profile_bp = Blueprint('test_profile', __name__, url_prefix='/api/test_profile')
 mysql = MySQL()
@@ -10,7 +12,10 @@ mysql = MySQL()
 
 # --------------------- Get all test profiles (Search + Pagination) --------------------- #
 @test_profile_bp.route('/', methods=['GET'])
+@token_required
 def get_all_test_profiles():
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor(DictCursor)
@@ -46,12 +51,16 @@ def get_all_test_profiles():
         test_profiles = cur.fetchall()
 
         total_pages = math.ceil(total_records / record_per_page)
+        end_time = time.time()
+
 
         return jsonify({
             "data": test_profiles,
             "totalRecords": total_records,
             "totalPages": total_pages,
-            "currentPage": current_page
+            "currentPage": current_page,
+            "execution_time": end_time - start_time
+
         }), 200
 
     except Exception as e:
@@ -59,6 +68,7 @@ def get_all_test_profiles():
     
 #----------------------GET all test without pagination-------------------
 @test_profile_bp.route('/get_test/', methods=['GET'])
+@token_required
 def get_all_test_profile():
     start_time = time.time()
     try:
@@ -86,7 +96,10 @@ def get_all_test_profile():
 
 # --------------------- Get test profile by ID --------------------- #
 @test_profile_bp.route('/<int:test_profile_id>', methods=['GET'])
+@token_required
 def get_test_profile(test_profile_id):
+    start_time = time.time()
+
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
@@ -96,6 +109,8 @@ def get_test_profile(test_profile_id):
 
         if not row:
             return jsonify({"error": "Test Profile not found"}), 404
+        end_time = time.time()
+        row['execution_time'] = end_time - start_time
 
         return jsonify(row), 200
         
@@ -106,7 +121,10 @@ def get_test_profile(test_profile_id):
 # --------------------- Create a new test profile --------------------- #
 
 @test_profile_bp.route('/', methods=['POST'])
+@token_required
 def create_test_profile():
+    start_time = time.time()
+
     try:
         data = request.get_json()
 
@@ -175,10 +193,14 @@ def create_test_profile():
         ))
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
+
 
         return jsonify({
             "message": "Test Profile created successfully",
-            "status": 201
+            "status": 201,
+            "execution_time": end_time - start_time
+
         }), 201
 
     except Exception as e:
@@ -187,7 +209,10 @@ def create_test_profile():
 
 #---------------------- api for unique test code ------------------
 @test_profile_bp.route('/check_test_code', methods=['POST'])
+@token_required
 def check_test_code():
+    start_time = time.time()
+
     try:
         data = request.get_json()
         test_code = data.get("test_code")
@@ -203,16 +228,21 @@ def check_test_code():
         cursor.execute(query, (test_code,))
         existing = cursor.fetchone()
         cursor.close()
+        end_time = time.time()
 
         if existing:
             return jsonify({
                 "unique": False,
-                "message": f"Test code '{test_code}' already exists."
+                "message": f"Test code '{test_code}' already exists.",
+                "execution_time": end_time - start_time
             }), 200
         else:
+                
+
             return jsonify({
                 "unique": True,
-                "message": f"Test code '{test_code}' is available."
+                "message": f"Test code '{test_code}' is available.",
+                "execution_time": end_time - start_time
             }), 200
 
     except Exception as e:
@@ -221,7 +251,10 @@ def check_test_code():
 
 # --------------------- Update a test profile --------------------- #
 @test_profile_bp.route('/<int:test_profile_id>', methods=['PUT'])
+@token_required
 def update_test_profile(test_profile_id):
+    start_time = time.time()
+
     try:
         data = request.get_json()
         test_name = data.get("test_name")
@@ -251,8 +284,10 @@ def update_test_profile(test_profile_id):
         cursor.execute(update_query, (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation, test_profile_id))
         mysql.connection.commit()
         cursor.close()
+        end_time = time.time()
 
-        return jsonify({"message": "Test Profile updated successfully"}), 200
+        return jsonify({"message": "Test Profile updated successfully",
+                        "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -260,7 +295,9 @@ def update_test_profile(test_profile_id):
 
 # --------------------- Delete a test profile --------------------- #
 @test_profile_bp.route('/<int:test_profile_id>', methods=['DELETE'])
+@token_required
 def delete_test_profile(test_profile_id):
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
@@ -272,24 +309,30 @@ def delete_test_profile(test_profile_id):
         cursor.execute("DELETE FROM test_profiles WHERE id = %s", (test_profile_id,))
         mysql.connection.commit()
         cursor.close()
-        return jsonify({"message": "Test&Profile deleted successfully","status" : 200}), 200
+        end_time = time.time()
+        return jsonify({"message": "Test&Profile deleted successfully","status" : 200,
+                        "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #--------------------Search test&profile by test_name---------------------#
 @test_profile_bp.route('/search/<string:test_name>', methods=['GET'])
+@token_required
 def search_test_profile(test_name):
+    start_time = time.time()
     try:
         cursor = mysql.connection.cursor()
         query = "SELECT * FROM test_profiles WHERE test_name LIKE %s"
         cursor.execute(query, ("%" + test_name + "%",))
         rows = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
 
         if not rows:
             return jsonify({"error": "No Test&Profile found"}), 404
 
-        return jsonify({"test_profiles": rows,"status": 200}), 200
+        return jsonify({"test_profiles": rows,"status": 200,
+                        "execution_time": end_time - start_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -297,13 +340,17 @@ def search_test_profile(test_name):
 
 # --------------------- Get department names for select header --------------------- #
 @test_profile_bp.route('/departments', methods=['GET'])
+@token_required
 def get_departments():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
         cursor.execute("SELECT department_name FROM departments")
         rows = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
+        rows.append({"execution_time": end_time - start_time})
         return jsonify(rows), 200
        
     except Exception as e:
@@ -315,7 +362,10 @@ import MySQLdb
 import MySQLdb
 from flask import jsonify 
 @test_profile_bp.route('/patient_tests/<int:patient_id>/', methods=['GET'])
+@token_required
 def get_patient_test_profile(patient_id):
+    start_time = time.time()
+
     try:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
@@ -331,6 +381,8 @@ def get_patient_test_profile(patient_id):
             "patient_id": patient_id,
             "tests": records  # return full list of test rows
         }
+        end_time = time.time()
+        response["execution_time"] = end_time - start_time
 
         return jsonify(response), 200
 
@@ -339,7 +391,9 @@ def get_patient_test_profile(patient_id):
     
 # ----------------------------Delayed Tests----------------------------
 @test_profile_bp.route('/delayed_tests', methods=['GET'])
+@token_required
 def get_delayed_tests():
+    start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -367,17 +421,20 @@ def get_delayed_tests():
         cursor.execute(query)
         results = cursor.fetchall()
         cursor.close()
+        end_time = time.time()
 
         if not results:
             return jsonify({
                 "status": 404,
-                "message": "No delayed tests found."
+                "message": "No delayed tests found.",
+                "execution_time": end_time - start_time
             }), 404
 
         return jsonify({
             "status": 200,
             "message": "Delayed tests fetched successfully.",
-            "data": results
+            "data": results,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
