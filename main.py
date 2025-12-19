@@ -130,6 +130,8 @@ app.register_blueprint(trial_balance_report_bp)
 app.register_blueprint(stock_usage_report_bp)
 #main
 
+
+
 # ---------- Account Book Blueprints ----------
 app.register_blueprint(account_bp)
 app.register_blueprint(voucher_bp)
