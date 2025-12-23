@@ -32,6 +32,9 @@ def get_companies_panels():
         filters = []
         params = []
 
+        # 🔹 Soft delete filter (ALWAYS)
+        filters.append("trash = 0")
+
         # 🔹 Search filter
         if company_name:
             filters.append("company_name LIKE %s")
@@ -48,10 +51,10 @@ def get_companies_panels():
             filters.append("DATE(created_at) <= %s")
             params.append(to_date)
 
-        where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+        where_clause = " WHERE " + " AND ".join(filters)
 
         # 🔹 Base query
-        base_query = f"SELECT * FROM companies_panel {where_clause}"
+        base_query = f"SELECT * FROM companies_panel{where_clause}"
 
         # 🔹 Count total records
         count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
@@ -78,6 +81,9 @@ def get_companies_panels():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
 
 
 
@@ -165,7 +171,7 @@ def delete_companies_panel(id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("DELETE FROM companies_panel WHERE id=%s", (id,))
+        cursor.execute("UPDATE companies_panel SET trash = 1 WHERE id=%s AND trash = 0", (id,))
         mysql.connection.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Companies panel not found"}), 404

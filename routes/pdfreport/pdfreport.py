@@ -113,7 +113,7 @@ def latest_value(lst):
 
 # ================= CORE RENDERER =================
 
-def render_table(test, layout):
+def render_table(test, layout, show_graph=False):
     params = test.get('parameters', [])
     dates  = safe_list(test.get('dates'))
 
@@ -126,38 +126,44 @@ def render_table(test, layout):
         results = safe_list(params[0].get("result_value"))
 
         html = """
-        <table border="1" cellpadding="4" cellspacing="0"
-               style="border-collapse:collapse; width:100%;">
-        <tr>
-            <th>Result</th>
-        </tr>
-        <tr>
-        """
-        # sirf 0 index result ka display
-        html += f"<td align='center'>{safe_get(results, 0)}</td>"
-        html += "</tr></table><br>"
+<table cellpadding="4" cellspacing="0"
+    style="border-collapse:collapse; width:100%; color:#333333;">
+<tr>
+    <th style="border:1px solid #9e9e9e; padding:7px; text-align:center;">Result</th>
+</tr>
+<tr>
+    <td style="padding:7px; text-align:center;">{}</td>
+</tr>
+</table><br>
+""".format(safe_get(results, 0))
         return html
 
     # ================= HEADERS =================
     if layout == "four":
         headers = ["Parameter", "Unit", "Normal Value"]
         headers.extend(dates)
-        headers.append("Graph")
+        if show_graph:
+            headers.append("Graph")
+        
 
     elif layout == "three":
-        headers = ["Parameter", "Unit", "Cutoff Value", "Result", "Graph"]
+        headers = ["Parameter", "Unit", "Cutoff Value", "Result"]
+        if show_graph:
+            headers.append("Graph")
 
     else:  # two
-        headers = ["Parameter", "Result", "Graph"]
+        headers = ["Parameter", "Result"]
+        if show_graph:
+            headers.append("Graph")
 
     colspan = len(headers)
 
     html = """
-    <table border="0.1" cellpadding="4">
+    <table  cellpadding="4">
     <tr>
     """
     for h in headers:
-        html += f"<th>{h}</th>"
+        html += f"<th style=\"text-align:center; border:1px solid #9e9e9e; vertical-align:middle; padding-top:7px;\">{h}</th>"
     html += "</tr>"
 
     last_sub = None
@@ -182,7 +188,7 @@ def render_table(test, layout):
         html += "<tr>"
 
         # ---- PARAMETER ----
-        html += f"<td>{p.get('parameter_name','')}</td>"
+        html += f"<td style=\"text-align: center; vertical-align: middle; padding-top: 7px;\">{p.get('parameter_name','')}</td>"
 
         # ================= FOUR COLUMN =================
         if layout == "four":
@@ -193,7 +199,7 @@ def render_table(test, layout):
             </td>
             """
             for i in range(len(dates)):
-                html += f"<td align='center'>{safe_get(results, i)}</td>"
+                html += f"<td style=\"text-align: center; vertical-align: middle; padding-top: 7px;\">{safe_get(results, i)}</td>"
 
         # ================= THREE COLUMN =================
         elif layout == "three":
@@ -206,11 +212,11 @@ def render_table(test, layout):
             html += f"<td align='center'>{safe_get(results, 0)}</td>"
 
         # ================= GRAPH =================
-        if layout in ("four", "three", "two"):
+        if show_graph and layout in ("four", "three", "two"):
             html += f"""
             <td>
                 <img src="{generate_graph_image(dates, results, p.get('parameter_name',''))}"
-                     style="width:200px; height:120px;">
+                    style="width:200px; height:120px;">
             </td>
             """
 
@@ -223,17 +229,17 @@ def render_table(test, layout):
 
 # ================= MAIN DISPATCHER =================
 
-def render_parameters_html(test):
+def render_parameters_html(test, show_graph=False):
     serology = (test.get("serology_elisa") or "").lower().strip()
 
     if serology == "four columns":
-        return render_table(test, "four")
+        return render_table(test, "four", show_graph)
 
     elif serology == "three columns":
-        return render_table(test, "three")
+        return render_table(test, "three", show_graph)
 
     elif serology == "two columns":
-        return render_table(test, "two")
+        return render_table(test, "two", show_graph)
 
     elif serology == "editor":
         return render_table(test, "editor")
@@ -243,7 +249,7 @@ def render_parameters_html(test):
 
 
 # -------------------- PDF HTML --------------------
-def generate_pdf_html(patient, counter, test_list, qr_data_url="", footer_data="", show_header_footer=True):
+def generate_pdf_html(patient, counter, test_list, qr_data_url="", footer_data="", show_header_footer=True, show_graph=False):
     footer_block = ""
     if show_header_footer and footer_data:
         footer_block = f"""
@@ -316,12 +322,13 @@ body {{ font-family: Arial; font-size: 13px; color: #000; }}
     # ------------------ Tests ------------------
     for t in test_list:
         html += f"""
-        <div style="border:1px solid #000; padding:5px; width:fit-content; margin:5px auto; text-align:center;">
+        <div style="text-align: center; vertical-align: middle; padding-top: 7px; border:1px solid; border-color:#000;"> 
             <b>{t.get('department','')}</b>
         </div>
-        <div style="margin-bottom:8px;">{t.get('test_name','')}</div>
+        
+        <div style="margin-bottom:8px;padding-top: 15px;">{t.get('test_name','')}</div>
         """
-        html += render_parameters_html(t)
+        html += render_parameters_html(t,show_graph)
         if t.get('comment'):
             html += f"<p><b>Comment:</b> {t['comment']}</p>"
         if t.get('intr_detail'):
@@ -358,12 +365,14 @@ def generate_pdf_report(id):
         tests_input = data.get("test", [])
         test_ids = [t.get("id") for t in tests_input if t.get("id")]
         show_header_footer = data.get("show_header_footer", True)
+        
+        show_graph = data.get("graph", False)
 
         placeholders = ",".join(["%s"]*len(test_ids)) if test_ids else None
         if placeholders:
             cursor.execute(f"""
                 SELECT pt.id AS patient_test_id, pt.verified_by, pt.verified_at, tp.id AS test_id, tp.test_name,
-                       tp.interpretation, tp.department_id, tp.fee, tp.serology_elisa
+                    tp.interpretation, tp.department_id, tp.fee, tp.serology_elisa
                 FROM patient_tests pt
                 JOIN test_profiles tp ON pt.test_id=tp.id
                 WHERE pt.patient_id=%s AND pt.counter_id=%s AND tp.id IN ({placeholders})
@@ -424,7 +433,7 @@ def generate_pdf_report(id):
         with open(footer_path, "rb") as f:
             footer_data = base64.b64encode(f.read()).decode()
 
-        html = generate_pdf_html(patient, counter, test_list, qr_data_url=qr_data_url, footer_data=footer_data, show_header_footer=show_header_footer)
+        html = generate_pdf_html(patient, counter, test_list, qr_data_url=qr_data_url, footer_data=footer_data, show_header_footer=show_header_footer, show_graph=show_graph)
 
         pdf_filename = f"report_{patient_id}_{int(datetime.now().timestamp())}.pdf"
         pdf_path = os.path.join(PDF_FOLDER, pdf_filename)

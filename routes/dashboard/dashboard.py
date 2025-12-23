@@ -157,7 +157,7 @@ def technician_report():
                     COUNT(pt.id) AS total_tests
                 FROM patient_tests pt
                 JOIN users u ON u.id = pt.performed_by
-                WHERE pt.result_status = 1
+                WHERE pt.result_status = 1 
                 AND pt.performed_date IS NOT NULL
                 AND pt.performed_date >= %s
                 AND pt.performed_date < DATE_ADD(%s, INTERVAL 1 DAY)

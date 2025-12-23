@@ -89,9 +89,15 @@ def get_users():
         offset = (current_page - 1) * record_per_page
 
         # base query
-        base_query = "SELECT id, name, contact_no, user_name, password, role, age, discount, cc FROM users"
+        base_query = """
+            SELECT id, name, contact_no, user_name, password, role, age, discount, cc
+            FROM users
+        """
         where_clauses = []
         values = []
+
+        # 🔹 TRASH FILTER (ALWAYS)
+        where_clauses.append("trash = 0")
 
         if search:
             where_clauses.append("(name LIKE %s OR user_name LIKE %s OR role LIKE %s)")
@@ -124,6 +130,7 @@ def get_users():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 #---------------------- User Get by ID -------------------
@@ -193,11 +200,11 @@ def delete_user(id):
     start_time = time.time()
     try:
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM users WHERE id = %s", (id,))
+        cursor.execute("SELECT * FROM users WHERE id = %s AND trash = 0", (id,))
         if not cursor.fetchone():
             return jsonify({"error": "User not found"}), 404
 
-        cursor.execute("DELETE FROM users WHERE id = %s", (id,))
+        cursor.execute("UPDATE users SET trash = 1 WHERE id = %s", (id,))
         mysql.connection.commit()
         end_time = time.time()
         return jsonify({"message": "User deleted successfully", "execution_time": end_time - start_time}), 200

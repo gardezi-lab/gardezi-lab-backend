@@ -23,11 +23,11 @@ def get_departments_optimized():
         record_per_page = request.args.get("recordperpage", 10, type=int)
         offset = (current_page - 1) * record_per_page
 
-        sql = "SELECT SQL_CALC_FOUND_ROWS id, department_name FROM departments"
+        sql = "SELECT SQL_CALC_FOUND_ROWS id, department_name FROM departments WHERE trash = 0"
         values = []
 
         if search:
-            sql += " WHERE department_name LIKE %s"
+            sql += " AND department_name LIKE %s"
             values.append(f"%{search}%")
 
         sql += " LIMIT %s OFFSET %s"
@@ -139,13 +139,13 @@ def delete_department(id):
     try:
         #if department id is not in database then return error
         cursor = mysql.connection.cursor() # type: ignore
-        cursor.execute("SELECT * FROM departments WHERE id=%s", (id,))
+        cursor.execute("SELECT id FROM departments WHERE id=%s AND trash = 0", (id,))
         result = cursor.fetchone()
         if not result:
             return jsonify({"error": "Department not found"}), 404
         
         cursor = mysql.connection.cursor() # type: ignore
-        cursor.execute("DELETE FROM departments WHERE id=%s", (id,))
+        cursor.execute("UPDATE departments SET trash = 1 WHERE id=%s", (id,))
         mysql.connection.commit() # type: ignore
         cursor.close()
         end_time = time.time()
