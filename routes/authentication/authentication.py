@@ -41,15 +41,15 @@ def token_required(f):
 def login_user():
     try:
         data = request.get_json()
-        user_name = data.get("user_name")
+        email = data.get("email")
         password = data.get("password")
 
-        if not user_name or not password:
-            return jsonify({"error": "Username and password are required"}), 400
+        if not email or not password:
+            return jsonify({"error": "email and password are required"}), 400
 
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM users WHERE user_name = %s AND password = %s", (user_name, password))
+        cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
         row = cursor.fetchone()
         column_names = [desc[0] for desc in cursor.description]
         cursor.close()
@@ -63,7 +63,7 @@ def login_user():
         expiry_hours = current_app.config.get('TOKEN_EXPIRY_HOURS', 12)
         payload = {
             "user_id": str(user["id"]),
-            "user_name": user["user_name"],
+            "email": user["email"],
             "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=expiry_hours)
         }
 

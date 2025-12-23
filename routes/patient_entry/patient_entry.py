@@ -283,7 +283,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         cursor.execute("""
             SELECT id, parameter_name, dropdown_values, unit, sub_heading, normalvalue, default_value, input_type
             FROM parameters
-            WHERE test_profile_id = %s
+            WHERE test_profile_id = %s AND trash = 0
         """, (test_id,))
         parameters = cursor.fetchall()
 
@@ -291,7 +291,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         cursor.execute("""
             SELECT parameter_id, result_value,cutoff_value
             FROM patient_results
-            WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s
+            WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s AND trash = 0
         """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
         
@@ -353,19 +353,19 @@ def delete_file(test_id):
     
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     print("file table ki delete id", test_id)
-    cursor.execute("SELECT patient_test_id FROM files WHERE id = %s", (test_id,))
+    cursor.execute("SELECT patient_test_id FROM files WHERE id = %s AND trash = 0", (test_id,))
     pt_test = cursor.fetchone()
     patient_test_id = pt_test['patient_test_id']
     print("patient test id", patient_test_id)
     
     
-    cursor.execute("SELECT patient_id, counter_id, test_id FROM patient_tests WHERE id = %s", (patient_test_id,))
+    cursor.execute("SELECT patient_id, counter_id, test_id FROM patient_tests WHERE id = %s ", (patient_test_id,))
     countme = cursor.fetchone()
     patient_id = countme['patient_id']
     counter_id = countme['counter_id']
     tests_id = countme['test_id']
             
-    cursor.execute("SELECT test_name FROM test_profiles WHERE id = %s", (tests_id,))
+    cursor.execute("SELECT test_name FROM test_profiles WHERE id = %s AND trash = 0", (tests_id,))
     count = cursor.fetchone()
     test_name_show = count['test_name']
     pt_entry_log = f"File deleted  Test: {test_name_show}"
@@ -373,7 +373,7 @@ def delete_file(test_id):
                     INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
                         VALUES (%s, %s, %s, NOW())
                     """, (patient_id, counter_id, pt_entry_log))
-    query = "DELETE FROM files WHERE id = %s "
+    query = "UPDATE files SET trash = 1 WHERE id = %s "
     cursor.execute(query,(test_id,))
     mysql.connection.commit()
     cursor.close()
@@ -451,7 +451,7 @@ def get_files_by(test_id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         
-        query = "SELECT * FROM files WHERE patient_test_id = %s"
+        query = "SELECT * FROM files WHERE patient_test_id = %s "
         cursor.execute(query,(test_id,))
         result = cursor.fetchall()
         print("resutl", result)
@@ -647,42 +647,40 @@ def update_fee(id):
         return jsonify({"error": str(e)}), 500        
 
 # ------------------- TODO Get All Patient Entries (Search + Pagination) ------------------ #
-
 @patient_entry_bp.route('/', methods=['GET'])
 @token_required
 def get_all_patient_entries():
+    import math, time
     start_time = time.time()
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # 🔹 filters (same)
+        # 🔹 Filters
         patient_name = request.args.get("patient_name", "", type=str)
         mr_number = request.args.get("mr_number", "", type=str)
         cell = request.args.get("cell", "", type=str)
         from_date = request.args.get("from_date", "", type=str)
         to_date = request.args.get("to_date", "", type=str)
 
-        # 🔹 pagination (added only)
+        # 🔹 Pagination
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
         offset = (current_page - 1) * record_per_page
 
+        # 🔹 Build filters
         filters = []
         params = []
 
         if patient_name:
             filters.append("pt.patient_name LIKE %s")
             params.append(f"%{patient_name}%")
-
         if mr_number:
             filters.append("pt.mr_number LIKE %s")
             params.append(f"%{mr_number}%")
-
         if cell:
             filters.append("pt.cell LIKE %s")
             params.append(f"%{cell}%")
-
         if from_date and to_date:
             filters.append("DATE(pt.created_at) BETWEEN %s AND %s")
             params.extend([from_date, to_date])
@@ -693,34 +691,42 @@ def get_all_patient_entries():
             filters.append("DATE(pt.created_at) <= %s")
             params.append(to_date)
 
-        where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+        # 🔹 Trash handling (show only trash=0)
+        filters.append("c.trash = 0")
 
-        # 🔹 IMPORTANT FIX:
-        # id ko dubara generate nahi kar rahe
+        # 🔹 Safe WHERE clause
+        if filters:
+            where_clause = "WHERE " + " AND ".join(filters)
+        else:
+            where_clause = ""
+        where_clause = where_clause.replace("WHERE AND", "WHERE").strip()
+
+        # 🔹 Main query
         base_query = f"""
             SELECT 
                 c.id AS cid,
-                c.pt_id AS id,
-                c.*,
-                pt.*
+                c.pt_id AS patient_id,
+                c.total_fee, c.paid, c.discount, c.sample, c.priority, c.remarks, 
+                c.company_id, c.pending_discount, c.reff_by,
+                pt.cell, pt.patient_name, pt.father_hasband_MR, pt.age, pt.gender, 
+                pt.email, pt.package_id, pt.address, pt.MR_number, pt.created_at
             FROM counter c
             JOIN patient_entry pt ON c.pt_id = pt.id
             {where_clause}
         """
 
-        # 🔹 count query (no duplicate id now)
+        # 🔹 Count query
         count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
         cursor.execute(count_query, params)
         total_records = cursor.fetchone()["total"]
 
-        # 🔹 pagination apply
+        # 🔹 Pagination query
         paginated_query = base_query + " ORDER BY c.id DESC LIMIT %s OFFSET %s"
         params_with_pagination = params + [record_per_page, offset]
-
         cursor.execute(paginated_query, params_with_pagination)
         patient_data_list = cursor.fetchall()
 
-        # 🔹 tests loop (unchanged)
+        # 🔹 Fetch tests for each patient
         for patient in patient_data_list:
             cursor.execute("""
                 SELECT 
@@ -732,9 +738,10 @@ def get_all_patient_entries():
                 FROM patient_tests pt
                 JOIN test_profiles tp ON pt.test_id = tp.id
                 WHERE pt.patient_id = %s AND pt.counter_id = %s
-            """, (patient["id"], patient["cid"]))
+            """, (patient["patient_id"], patient["cid"]))
             patient["tests"] = cursor.fetchall()
 
+        # 🔹 Prepare response
         end_time = time.time()
         total_pages = math.ceil(total_records / record_per_page)
 
@@ -748,6 +755,8 @@ def get_all_patient_entries():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 
 # ------------------- TODO Get Patient Entry by ID ------------------ #
@@ -931,8 +940,8 @@ def delete_patient_entry(id):
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
 
-        
-        cursor.execute("SELECT pt_id FROM counter WHERE id = %s", (id,))
+        id = int(id)
+        cursor.execute("SELECT pt_id FROM counter WHERE id = %s AND trash = 0", (id,))
         result = cursor.fetchone()
 
         if not result:
@@ -940,7 +949,7 @@ def delete_patient_entry(id):
 
         patient_id = result[0]
         
-        cursor.execute("DELETE FROM counter WHERE id = %s", (id,))
+        cursor.execute("UPDATE counter SET trash = 1 WHERE id = %s", (id,))
         #cursor.execute("DELETE FROM patient_entry WHERE id = %s", (patient_id,))
         mysql.connection.commit()
         cursor.close()

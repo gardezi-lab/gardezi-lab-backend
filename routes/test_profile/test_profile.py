@@ -14,6 +14,7 @@ mysql = MySQL()
 @test_profile_bp.route('/', methods=['GET'])
 @token_required
 def get_all_test_profiles():
+    import math, time
     start_time = time.time()
 
     try:
@@ -24,13 +25,15 @@ def get_all_test_profiles():
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
-
         offset = (current_page - 1) * record_per_page
 
         # base query
         base_query = "SELECT * FROM test_profiles"
         where_clauses = []
         values = []
+
+        # 🔹 Trash filter
+        where_clauses.append("trash = 0")  # show only non-trash records
 
         if search:
             where_clauses.append("test_name LIKE %s")
@@ -45,7 +48,7 @@ def get_all_test_profiles():
         total_records = cur.fetchone()["total"]
 
         # pagination
-        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
+        base_query += " ORDER BY id ASC LIMIT %s OFFSET %s"  # 🔹 ASC for ascending
         values.extend([record_per_page, offset])
         cur.execute(base_query, values)
         test_profiles = cur.fetchall()
@@ -53,46 +56,16 @@ def get_all_test_profiles():
         total_pages = math.ceil(total_records / record_per_page)
         end_time = time.time()
 
-
         return jsonify({
             "data": test_profiles,
             "totalRecords": total_records,
             "totalPages": total_pages,
             "currentPage": current_page,
             "execution_time": end_time - start_time
-
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-#----------------------GET all test without pagination-------------------
-@test_profile_bp.route('/get_test/', methods=['GET'])
-@token_required
-def get_all_test_profile():
-    start_time = time.time()
-    try:
-        mysql = current_app.mysql
-        cur = mysql.connection.cursor(DictCursor)
-
-        # base query
-        base_query = "SELECT * FROM test_profiles"
-        
-        cur.execute(base_query)
-        test_profiles = cur.fetchall()
-        end_time = time.time()
-
-        
-
-        return jsonify({
-            "data": test_profiles,
-            "executionTime": end_time - start_time
-            
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 
 # --------------------- Get test profile by ID --------------------- #
 @test_profile_bp.route('/<int:test_profile_id>', methods=['GET'])
@@ -184,7 +157,7 @@ def create_test_profile():
         insert_query = """
             INSERT INTO test_profiles 
             (test_name, test_code, sample_required, select_header, fee, delivery_time,
-             serology_elisa, interpretation, unit_ref_range, test_formate, department_id) 
+            serology_elisa, interpretation, unit_ref_range, test_formate, department_id) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(insert_query, (
@@ -301,12 +274,12 @@ def delete_test_profile(test_profile_id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM test_profiles WHERE id = %s", (test_profile_id,))
+        cursor.execute("SELECT * FROM test_profiles WHERE id = %s AND trash = 0", (test_profile_id,))
         row = cursor.fetchone()
         if not row:
             return jsonify({"error": "Test Profile not found"}), 404
 
-        cursor.execute("DELETE FROM test_profiles WHERE id = %s", (test_profile_id,))
+        cursor.execute("UPDATE test_profiles SET trash = 1 WHERE id = %s", (test_profile_id,))
         mysql.connection.commit()
         cursor.close()
         end_time = time.time()

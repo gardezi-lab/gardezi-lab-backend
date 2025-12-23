@@ -17,34 +17,36 @@ def get_collection_centers():
         mysql = current_app.mysql      
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # 🔹 Query params
+        # Params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
 
         offset = (current_page - 1) * record_per_page
 
-        # 🔹 Base query
+        # Base query (NO WHERE here)
         base_query = "SELECT * FROM collectioncenter"
         where_clauses = []
         params = []
 
-        # 🔹 Filter (search)
-        if search:
-            where_clauses.append(
-                "(name LIKE %s)"
-            )
-            params.extend([f"%{search}%"])
+        # Soft delete filter
+        where_clauses.append("trash = 0")
 
+        # Search filter
+        if search:
+            where_clauses.append("name LIKE %s")
+            params.append(f"%{search}%")
+
+        # Apply WHERE
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
 
-        # 🔹 Count total records
+        # Count query
         count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
         cursor.execute(count_query, params)
         total_records = cursor.fetchone()["total"]
 
-        # 🔹 Pagination + order
+        # Pagination
         base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
         params.extend([record_per_page, offset])
 
@@ -134,7 +136,7 @@ def delete_collection_center(center_id):
 
         
         cursor.execute(
-            "DELETE FROM collectioncenter WHERE id=%s",
+            "UPDATE collectioncenter SET trash = 1 WHERE id=%s",
             (center_id,)
         )
         mysql.connection.commit()

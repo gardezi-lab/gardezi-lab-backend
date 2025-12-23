@@ -55,9 +55,9 @@ def create_interpretation():
 def get_interpretations():
     start_time = time.time()
     try:
-        mysql = current_app.mysql # type: ignore
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor) 
-       
+        mysql = current_app.mysql  # type: ignore
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
         # Query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
@@ -65,16 +65,22 @@ def get_interpretations():
 
         offset = (current_page - 1) * record_per_page
 
-        # Base query
+        # Base query (NO WHERE)
         base_query = "SELECT * FROM interpretations"
         where_clauses = []
         values = []
 
+        # Soft delete filter (ALWAYS)
+        where_clauses.append("trash = 0")
+
         # Search condition
         if search:
-            where_clauses.append("(code LIKE %s OR heading LIKE %s OR detail LIKE %s)")
-            values.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+            where_clauses.append(
+                "(code LIKE %s)"
+            )
+            values.extend([f"%{search}%"])
 
+        # Apply WHERE
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
 
@@ -83,13 +89,13 @@ def get_interpretations():
         cursor.execute(count_query, values)
         total_records = cursor.fetchone()["total"]
 
-        # Apply pagination
+        # Pagination
         base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
 
         cursor.execute(base_query, values)
         interpretations = cursor.fetchall()
-        
+
         end_time = time.time()
         total_pages = math.ceil(total_records / record_per_page)
 
@@ -101,8 +107,12 @@ def get_interpretations():
             "executionTime": end_time - start_time
         }), 200
 
-    except Exception as e:   
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+
 
 
 # -------------------- GET by ID -------------------- #
@@ -164,7 +174,7 @@ def delete_interpretation(id):
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
-        cur.execute("DELETE FROM interpretations WHERE id=%s", (id,))
+        cur.execute("UPDATE interpretations SET trash = 1 WHERE id=%s AND trash = 0", (id,))
         mysql.connection.commit()
         deleted_rows = cur.rowcount
         cur.close()

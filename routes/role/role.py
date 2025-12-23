@@ -24,20 +24,19 @@ def get_roles():
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
- 
         offset = (current_page - 1) * record_per_page
 
         # Base query
         base_query = "SELECT * FROM roles"
-        where_clauses = []
+        where_clauses = ["trash = 0"]  # 🔹 Always add trash filter
         values = []
 
         if search:
             where_clauses.append("role_name LIKE %s")
             values.append(f"%{search}%")
 
-        if where_clauses:
-            base_query += " WHERE " + " AND ".join(where_clauses)
+        where_clause = " WHERE " + " AND ".join(where_clauses)
+        base_query += where_clause
 
         # Count total records
         count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as subquery"
@@ -61,11 +60,9 @@ def get_roles():
             "executionTime": end_time - start_time
         }), 200
 
-        return jsonify({
-            "data" : paginate_query(cur,base_query),
-            "status" : 200})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # --------------------- Get role by ID --------------------- #
@@ -171,7 +168,7 @@ def delete_role(role_id):
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
-        cur.execute("DELETE FROM roles WHERE id = %s", (role_id,))
+        cur.execute("UPDATE roles SET trash = 1 WHERE id = %s", (role_id,))
         mysql.connection.commit()
         cur.close()
         end_time = time.time()

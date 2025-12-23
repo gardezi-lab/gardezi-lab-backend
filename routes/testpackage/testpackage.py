@@ -66,14 +66,13 @@ def get_packages():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
 
-        # 🔹 query params (added)
+        # 🔹 query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
         record_per_page = request.args.get("recordperpage", 10, type=int)
-
         offset = (current_page - 1) * record_per_page
 
-        filters = []
+        filters = ["trash = 0"]  # 🔹 always show non-trash records
         params = []
 
         if search:
@@ -82,7 +81,7 @@ def get_packages():
 
         where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
-        # 🔹 base query (same table)
+        # 🔹 base query
         base_query = f"""
             SELECT *
             FROM test_packages
@@ -99,7 +98,7 @@ def get_packages():
         cursor.close()
         end_time = time.time()
 
-        # 🔹 RESPONSE SAME (no change)
+        # 🔹 RESPONSE
         return jsonify({
             "data": packages,
             "execution_time": end_time - start_time
@@ -185,7 +184,7 @@ def delete_package(id):
     start_time = time.time()
     mysql = current_app.mysql
     cur = mysql.connection.cursor()
-    cur.execute("DELETE FROM test_packages WHERE id=%s", (id,))
+    cur.execute("UPDATE test_packages SET trash = 1 WHERE id=%s", (id,))
     mysql.connection.commit()
     cur.close()
     end_time = time.time()

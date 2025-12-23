@@ -28,18 +28,20 @@ def get_all_parameters():
 
         offset = (current_page - 1) * record_per_page
 
-        # Base query
-        base_query = "SELECT * FROM parameters"
+        # Base query (NO WHERE)
+        base_query = "SELECT * FROM parameters " 
         where_clauses = []
         values = []
 
+        # Soft delete filter
+        where_clauses.append("trash = 0")
+
         # Search condition
         if search:
-            where_clauses.append(
-                "(parameter_name LIKE %s OR sub_heading LIKE %s OR input_type LIKE %s OR unit LIKE %s)"
-            )
-            values.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+            where_clauses.append("parameter_name LIKE %s")
+            values.append(f"%{search}%")
 
+        # Apply WHERE
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
 
@@ -48,15 +50,14 @@ def get_all_parameters():
         cursor.execute(count_query, values)
         total_records = cursor.fetchone()["total"]
 
-        # Apply pagination
+        # Pagination
         base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
 
         cursor.execute(base_query, values)
         parameters = cursor.fetchall()
-        
-        end_time = time.time()
 
+        end_time = time.time()
         total_pages = math.ceil(total_records / record_per_page)
 
         return jsonify({
@@ -69,6 +70,10 @@ def get_all_parameters():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+
 
 # --------------------- Get parameter by ID --------------------- #
 @parameter_bp.route('/<int:parameter_id>', methods=['GET'])
@@ -285,13 +290,13 @@ def delete_parameter(parameter_id):
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM parameters WHERE id = %s", (parameter_id,))
+        cur.execute("SELECT id FROM parameters WHERE id = %s AND trash = 0", (parameter_id,))
         row = cur.fetchone()
 
         if not row:
             return jsonify({"error": "Parameter not found"}), 404
 
-        cur.execute("DELETE FROM parameters WHERE id = %s", (parameter_id,))
+        cur.execute("UPDATE parameters SET trash = 1 WHERE id = %s", (parameter_id,))
         mysql.connection.commit()
         cur.close()
         end_time = time.time()
@@ -410,13 +415,13 @@ def delete_parameter_value(id):
     try:
         mysql = current_app.mysql
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM parameter_value WHERE id = %s", (id,))
+        cur.execute("SELECT * FROM parameter_value WHERE id = %s AND trash = 0", (id,))
         row = cur.fetchone()
 
         if not row:
             return jsonify({"error": "Parameter not found"}), 404
 
-        cur.execute("DELETE FROM parameter_value WHERE id = %s", (id,))
+        cur.execute("UPDATE parameter_value SET trash = 1 WHERE id = %s", (id,))
         mysql.connection.commit()
         cur.close()
         
