@@ -59,7 +59,8 @@ def get_all_stock_usage():
         record_per_page = request.args.get("recordperpage", 10, type=int)
         offset = (current_page - 1) * record_per_page
 
-        where_clause = "WHERE 1=1"
+        # Soft delete aware
+        where_clause = "WHERE su.trash = 0"
         values = []
 
         if search:
@@ -112,6 +113,7 @@ def get_all_stock_usage():
     finally:
         if cursor:
             cursor.close()
+
 
 # -------------------- READ ONE (GET by ID) -------------------- #
 @stock_usage_bp.route('/<int:id>', methods=['GET'])
@@ -183,7 +185,7 @@ def update_stock_usage(id):
         execution_time = time.time() - start_time
         return jsonify({"error": str(e), "execution_time": execution_time}), 500
 
-# -------------------- DELETE (DELETE) -------------------- #
+# -------------------- DELETE (SOFT DELETE) -------------------- #
 @stock_usage_bp.route('/<int:id>', methods=['DELETE'])
 @token_required
 def delete_stock_usage(id):
@@ -191,21 +193,33 @@ def delete_stock_usage(id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM stock_usage WHERE id = %s", (id,))
-        usage = cursor.fetchone()
 
+        # Check if usage exists and not already deleted
+        cursor.execute(
+            "SELECT id FROM stock_usage WHERE id = %s AND trash = 0",
+            (id,)
+        )
+        usage = cursor.fetchone()
         if not usage:
             cursor.close()
             execution_time = time.time() - start_time
             return jsonify({"message": "Stock usage not found", "execution_time": execution_time}), 404
 
-        cursor.execute("DELETE FROM stock_usage WHERE id = %s", (id,))
+        # Soft delete
+        cursor.execute(
+            "UPDATE stock_usage SET trash = 1 WHERE id = %s",
+            (id,)
+        )
         mysql.connection.commit()
         cursor.close()
 
         execution_time = time.time() - start_time
-        return jsonify({"message": "Stock usage deleted successfully", "execution_time": execution_time}), 200
+        return jsonify({
+            "message": "Stock usage deleted successfully",
+            "execution_time": execution_time
+        }), 200
 
     except Exception as e:
         execution_time = time.time() - start_time
         return jsonify({"error": str(e), "execution_time": execution_time}), 500
+

@@ -19,12 +19,12 @@ def create_stock_purchase():
         mysql = current_app.mysql
         data = request.get_json()
 
-        vendor_id = data.get('vendor_id')
+        
         stock_item_id = data.get('stock_item_id')
         qty = data.get('qty')
         price = data.get('price')
 
-        if not all([vendor_id, stock_item_id, qty, price]):
+        if not all([stock_item_id, qty, price]):
             return jsonify({"error": "All fields are required"}), 400
 
         qty = float(qty)
@@ -54,17 +54,17 @@ def create_stock_purchase():
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (voucher_id, default_cash_id, totalamount, 0, 'JV', date))
 
-        cursor.execute("""
-            INSERT INTO journal_voucher_entries
-            (journal_voucher_id, account_head_id, dr, cr, type, date)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (voucher_id, vendor_id, 0, totalamount, 'JV', date))
+        # cursor.execute("""
+        #     INSERT INTO journal_voucher_entries
+        #     (journal_voucher_id, account_head_id, dr, cr, type, date)
+        #     VALUES (%s, %s, %s, %s, %s)
+        # """, (voucher_id, 0, totalamount, 'JV', date))
 
         # Insert stock purchase
         cursor.execute("""
-            INSERT INTO stock_purchases (vendor_id, stock_item_id, qty, price, date_created)
-            VALUES (%s, %s, %s, %s, NOW())
-        """, (vendor_id, stock_item_id, qty, price))
+            INSERT INTO stock_purchases ( stock_item_id, qty, price, date_created)
+            VALUES ( %s, %s, %s, NOW())
+        """, ( stock_item_id, qty, price))
         mysql.connection.commit()
         purchase_id = cursor.lastrowid
 
@@ -96,7 +96,8 @@ def get_all_stock_purchases():
         record_per_page = request.args.get("recordperpage", 10, type=int)
         offset = (current_page - 1) * record_per_page
 
-        where_clause = "WHERE 1=1"
+        # Soft delete aware
+        where_clause = "WHERE sp.trash = 0"
         values = []
 
         if search:
@@ -232,7 +233,7 @@ def update_stock_purchase(id):
         execution_time = time.time() - start_time
         return jsonify({"error": str(e), "execution_time": execution_time}), 500
 
-# -------------------- DELETE (DELETE) -------------------- #
+# -------------------- DELETE (SOFT DELETE) -------------------- #
 @stock_purchase_bp.route('/<int:id>', methods=['DELETE'])
 @token_required
 def delete_stock_purchase(id):
@@ -240,20 +241,31 @@ def delete_stock_purchase(id):
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM stock_purchases WHERE id = %s", (id,))
-        purchase = cursor.fetchone()
 
+        # Check if purchase exists and not already deleted
+        cursor.execute(
+            "SELECT id FROM stock_purchases WHERE id = %s AND trash = 0",
+            (id,)
+        )
+        purchase = cursor.fetchone()
         if not purchase:
             cursor.close()
             execution_time = time.time() - start_time
             return jsonify({"message": "Stock purchase not found", "execution_time": execution_time}), 404
 
-        cursor.execute("DELETE FROM stock_purchases WHERE id = %s", (id,))
+        # Soft delete
+        cursor.execute(
+            "UPDATE stock_purchases SET trash = 1 WHERE id = %s",
+            (id,)
+        )
         mysql.connection.commit()
         cursor.close()
 
         execution_time = time.time() - start_time
-        return jsonify({"message": "Stock purchase deleted successfully", "execution_time": execution_time}), 200
+        return jsonify({
+            "message": "Stock purchase deleted successfully",
+            "execution_time": execution_time
+        }), 200
 
     except Exception as e:
         execution_time = time.time() - start_time

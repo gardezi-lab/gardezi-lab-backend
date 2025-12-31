@@ -96,27 +96,61 @@ def get_role(role_id):
 @token_required
 def create_role():
     start_time = time.time()
+    mysql = current_app.mysql
+    cur = mysql.connection.cursor()
 
     try:
         data = request.get_json()
         role_name = data.get("role_name")
-        if not role_name:
-            return jsonify({"error": "Role name is required"}), 400
-        if not isinstance(role_name, str):
-            return jsonify({"error": "Role name must be a string"}), 400
 
-        mysql = current_app.mysql
-        cur = mysql.connection.cursor()
+        # Validation
+        if not role_name or not isinstance(role_name, str):
+            return jsonify({"error": "Invalid role name"}), 400
+
+        import re
+        role_name = role_name.strip().lower().replace(" ", "_") # Space ko underscore se badla
+        if not re.match(r'^[a-z0-9_]+$', role_name):
+            return jsonify({"error": "Invalid role name format"}), 400
+
+        # 1️⃣ Insert role into 'roles' table
         cur.execute("INSERT INTO roles (role_name) VALUES (%s)", (role_name,))
         mysql.connection.commit()
+
+        # 2️⃣ Check if column already exists in 'user_module_permissions'
+        cur.execute("""
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'user_module_permissions' 
+            AND COLUMN_NAME = %s
+        """, (role_name,))
+        
+        column_exists = cur.fetchone()
+
+        # 3️⃣ Add column if it doesn't exist
+        if not column_exists:
+            # Note: SQL parameters table/column names par kaam nahi karte, 
+            # isliye yahan f-string zaroori hai lekin validation ke baad.
+            alter_sql = f"ALTER TABLE user_module_permissions ADD COLUMN `{role_name}` TINYINT(1) DEFAULT 0"
+            cur.execute(alter_sql)
+            mysql.connection.commit()
+
         cur.close()
         end_time = time.time()
 
-        return jsonify({"message": "Role created successfully",
-                        "status" : 201,
-                        "execution_time": end_time - start_time}), 201
+        return jsonify({
+            "message": "Role created and column added successfully",
+            "role": role_name,
+            "status": 201,
+            "execution_time": end_time - start_time
+        }), 201
+
     except Exception as e:
+        if mysql.connection:
+            mysql.connection.rollback()
         return jsonify({"error": str(e)}), 500
+
+
 
 
 # --------------------- Update an existing role --------------------- #
