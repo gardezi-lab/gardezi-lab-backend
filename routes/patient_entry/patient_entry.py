@@ -23,7 +23,7 @@ mysql = MySQL()
 @patient_entry_bp.route('/', methods=['POST'])
 @token_required
 def create_patient_entry():
-    strat_time = time.time()
+    start_time = time.time()
     try:
         data = request.get_json()
 
@@ -291,7 +291,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
         cursor.execute("""
             SELECT parameter_id, result_value,cutoff_value
             FROM patient_results
-            WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s AND trash = 0
+            WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s
         """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
         
@@ -522,15 +522,15 @@ def add_or_update_result(id):
                 cursor.execute("""
                     INSERT INTO patient_results
                     (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, created_at, test_profile_id, is_completed, counter_id)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, 0, %s)
-                """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value, test_profile_id, id))
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (patient_id, patient_test_id, parameter_id, result_value, cutoff_value,datetime.now(), test_profile_id,0, id))
 
         # comment add update
         cursor.execute("""
                             UPDATE patient_tests
                             SET comment = %s, result_status=1, performed_by = %s, performed_date = NOW()
                             WHERE test_id = %s AND counter_id = %s
-                        """, (comment, test_profile_id, id))
+                        """, (comment, 1,test_profile_id, id))
         
                         #agar all verified ho gae hen to then counter ka status change kr do.
         cursor.execute("SELECT COUNT(*) AS total FROM patient_tests WHERE result_status=0 AND counter_id = %s", (id,))

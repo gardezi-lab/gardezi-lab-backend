@@ -122,7 +122,7 @@ def get_all_cash_receipt_vouchers():
         offset = (current_page - 1) * record_per_page
 
         # ---------------- Base WHERE Clause ---------------- #
-        where_clause = "WHERE jv.voucher_type = 'CRV'"
+        where_clause = "WHERE jv.voucher_type = 'CRV' AND jv.trash = 0"
         filter_values = []
 
         # ---------------- Filtering ---------------- #
@@ -243,27 +243,35 @@ def delete_cash_receipt_voucher(id):
     start_time = time.time()
 
     try:
-        mysql = current_app.mysql  
+        mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        cursor.execute("SELECT * FROM journal_voucher WHERE id = %s AND voucher_type = 'CRV'", (id,))
+        # Check voucher exists & not already deleted
+        cursor.execute(
+            "SELECT * FROM journal_voucher WHERE id = %s AND voucher_type = 'CRV' AND trash = 0",
+            (id,)
+        )
         voucher = cursor.fetchone()
+
         if not voucher:
             cursor.close()
             return jsonify({"message": "Cash Receipt Voucher not found"}), 404
 
-        cursor.execute("DELETE FROM journal_voucher_entries WHERE journal_voucher_id = %s", (id,))
-        cursor.execute("DELETE FROM journal_voucher WHERE id = %s", (id,))
+        # SOFT DELETE 
+        cursor.execute(
+            "UPDATE journal_voucher SET trash = 1 WHERE id = %s",
+            (id,)
+        )
 
         mysql.connection.commit()
         cursor.close()
 
         end_time = time.time()
-        execution_time = end_time - start_time
 
         return jsonify({
             "message": "Cash Receipt Voucher deleted successfully",
-            "execution_time": execution_time
+            "status": 200,
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:

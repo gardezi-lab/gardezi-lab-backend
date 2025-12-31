@@ -13,8 +13,7 @@ mysql = MySQL()
 @token_required
 def get_accountheads():
     try:
-        mysql = current_app.mysql  # type: ignore
-        #  DictCursor use kiya
+        mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
         search = request.args.get("search", "", type=str)
@@ -23,7 +22,7 @@ def get_accountheads():
         offset = (current_page - 1) * record_per_page
 
         base_query = "SELECT * FROM account_heads"
-        where_clauses = []
+        where_clauses = ["trash = 0"]   
         values = []
 
         if search:
@@ -33,16 +32,16 @@ def get_accountheads():
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
 
-        # total count
+        # -------- Total Count -------- #
         count_query = f"SELECT COUNT(*) as total FROM ({base_query}) AS subquery"
         cursor.execute(count_query, values)
-        total_records = cursor.fetchone()["total"]  #  DictCursor ki wajah se yeh chalega
+        total_records = cursor.fetchone()["total"]
 
-        # pagination
+        # -------- Pagination -------- #
         base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"
         values.extend([record_per_page, offset])
         cursor.execute(base_query, values)
-        users = cursor.fetchall()  #  ab yeh list of dicts return karega
+        users = cursor.fetchall()
 
         total_pages = math.ceil(total_records / record_per_page)
 
@@ -54,7 +53,8 @@ def get_accountheads():
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500 
+        return jsonify({"error": str(e)}), 500
+
 
 
         # accountheads = []
@@ -191,17 +191,29 @@ def update_account_head(id):
 @token_required
 def delete_account_head(id):
     try:
+        mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM account_heads WHERE id=%s", (id,))
+
+        cursor.execute(
+            "SELECT id FROM account_heads WHERE id = %s AND trash = 0",
+            (id,)
+        )
         result = cursor.fetchone()
         if not result:
+            cursor.close()
             return jsonify({"error": "Account Head not found"}), 404
 
-        cursor.execute("DELETE FROM account_heads WHERE id=%s", (id,))
+        cursor.execute(
+            "UPDATE account_heads SET trash = 1 WHERE id = %s",
+            (id,)
+        )
         mysql.connection.commit()
         cursor.close()
 
-        return jsonify({"message": "Account Head deleted successfully"}), 200
+        return jsonify({
+            "message": "Account Head deleted successfully",
+            "status": 200
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
