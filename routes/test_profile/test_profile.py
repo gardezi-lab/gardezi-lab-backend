@@ -97,7 +97,7 @@ def get_test_names():
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(DictCursor)
-        cursor.execute("SELECT id, test_name FROM test_profiles WHERE trash = 0")
+        cursor.execute("SELECT id, test_name,sample_required, delivery_time, fee FROM test_profiles WHERE trash = 0")
         rows = cursor.fetchall()
         cursor.close()
         end_time = time.time()
@@ -106,7 +106,7 @@ def get_test_names():
             "execution_time": end_time - start_time
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500 
 
 # --------------------- Create a new test profile --------------------- #
 
