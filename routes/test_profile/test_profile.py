@@ -89,7 +89,24 @@ def get_test_profile(test_profile_id):
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+# ----------------------get test name and id ---------------------#
+@test_profile_bp.route('/test_names', methods=['GET'])
+@token_required
+def get_test_names():
+    start_time = time.time()
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+        cursor.execute("SELECT id, test_name FROM test_profiles WHERE trash = 0")
+        rows = cursor.fetchall()
+        cursor.close()
+        end_time = time.time()
+        return jsonify({
+            "data": rows,
+            "execution_time": end_time - start_time
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --------------------- Create a new test profile --------------------- #
 
