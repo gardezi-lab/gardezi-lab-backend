@@ -110,7 +110,7 @@ def login_user():
         if not user:
             return jsonify({"error": "Invalid credentials"}), 401
 
-        # 2. Password check (Plain text - security ke liye hash use karein baad mein)
+        # 2. Password check 
         if user["password"] != password:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -124,7 +124,8 @@ def login_user():
             "user_id": user["id"],
             "email": user["email"],
             "role": role,
-            "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=12)
+            "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+
         }
 
         token = jwt.encode(payload, str(current_app.config["SECRET_KEY"]), algorithm="HS256")
@@ -137,7 +138,8 @@ def login_user():
                 "id": user["id"],
                 "email": user["email"],
                 "role": user["role"],
-                "name": user.get("name") # Agar name field hai toh
+                "name": user.get("name"),
+                "image_path": user.get("profile_pic_path")
             },
             "permissions": permissions
         }), 200
