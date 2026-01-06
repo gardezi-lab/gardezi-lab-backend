@@ -42,7 +42,7 @@ def generate_report(id):
         print("printing error", "no error by here ss33112200")
         print('pt id', patient_id)
         print('counter_id', id)
-        print('log', pt_entry_log)
+        
         
         cursor.execute("""
                 INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at)
@@ -104,15 +104,22 @@ def generate_report(id):
             fee = int(test.get('fee') or 0)
             total_fee += fee
             
+            
+            
+            verified_by_name = ""
+            verified_by_qualification = ""
+            if verified_by_id:
             #first ham check kr rhe hen k es test me koi interpertation add he. agar add he to uski id
-            cursor.execute("SELECT name, qualification FROM users WHERE id = %s", (verified_by_id,)) 
-            resulttest = cursor.fetchone()
-            verified_by_name = resulttest['name']
-            print("finding line error 1021s")
-            verified_by_qualification = resulttest['qualification']
+                cursor.execute("SELECT name, qualification FROM users WHERE id = %s", (verified_by_id,)) 
+                resulttest = cursor.fetchone()
+                verified_by_name = resulttest['name']
+                print("verified by name", verified_by_name)
+                print("finding line error 1021s")
+                verified_by_qualification = resulttest['qualification']
+            
             cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
-            resulttest = cursor.fetchone()
-            intprid = resulttest['interpretation']
+            resultinter = cursor.fetchone()
+            intprid = resultinter['interpretation']
             detaildetail = ""
             if intprid:
                 cursor.execute("SELECT detail FROM interpretations WHERE id = %s", (intprid,)) 
@@ -137,23 +144,28 @@ def generate_report(id):
 
             cursor.execute("""
     SELECT 
-        c.date_created AS test_datetime,
-        p.parameter_name,
-        pt.counter_id AS rowcounterid,
-        p.unit,
-        p.sub_heading,
-        p.normalvalue,
-        pr.result_value,
-        pr.cutoff_value,
-        pr.test_profile_id
-    FROM parameters p
-    JOIN patient_tests pt ON p.test_profile_id = pt.test_id AND pt.patient_id = %s AND pt.counter_id <= %s
-    JOIN patient_results pr ON pr.parameter_id = p.id AND pr.counter_id=pt.counter_id
-    JOIN counter c ON pt.counter_id = c.id
-    WHERE pt.test_id = %s 
-    ORDER BY c.date_created ASC
-""", (patient_id, id, test_id))
-            print("testing test_id inside loop", test_id)
+    c.date_created AS test_datetime,
+    p.parameter_name,
+    pt.counter_id AS rowcounterid,
+    p.unit,
+    p.sub_heading,
+    p.normalvalue,
+    pr.result_value,
+    pr.cutoff_value,
+    pr.test_profile_id
+FROM parameters p
+JOIN patient_tests pt 
+    ON p.test_profile_id = pt.test_id 
+    AND pt.patient_id = %s
+LEFT JOIN patient_results pr 
+    ON pr.parameter_id = p.id 
+    AND pr.counter_id = pt.counter_id
+JOIN counter c 
+    ON pt.counter_id = c.id
+WHERE pt.test_id = %s
+ORDER BY c.date_created ASC
+
+""", (patient_id, test_id))
             
             history_rows = cursor.fetchall()
             print("history_rows", history_rows)
