@@ -163,3 +163,29 @@ def logout_user():
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ----------Token verify--------------------
+@authentication_bp.route('/verify_token', methods=['POST'])
+def verify_token():
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({"valid": False}), 401
+
+    token = auth_header.split(" ")[1]
+
+    try:
+        if token in current_app.blacklisted_tokens:
+            return jsonify({"valid": False}), 401
+
+        jwt.decode(
+            token,
+            str(current_app.config['SECRET_KEY']),
+            algorithms=["HS256"]
+        )
+
+        return jsonify({"valid": True}), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"valid": False}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"valid": False}), 401

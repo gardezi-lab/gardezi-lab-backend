@@ -22,8 +22,8 @@ def create_user():
     try:
         data = request.get_json()
         name = data.get("name")
+        user_name = data.get("email")
         contact_no = data.get("contact_no")
-        user_name = data.get("user_name")
         discount = data.get("discount")
         plain_password = data.get("password")
         if not plain_password:
@@ -33,19 +33,21 @@ def create_user():
         cc = data.get("cc")
 
         # Validation
-        if not all([name, contact_no, user_name, age, role]):
+        if not all([name, contact_no, user_name, role]):
             return jsonify({"error": "All fields except password are required"}), 400
 
         if isinstance(name, int) or isinstance(user_name, int):
             return jsonify({"message": "Name  or username cannot be number"}), 400
 
         insert_query = """
-            INSERT INTO users (name, contact_no, user_name, password, role, age, discount, cc)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO users (name, user_name, contact_no, email, password, role, age, discount, cc)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+
         """
         cursor = mysql.connection.cursor()
         cursor.execute(insert_query, (
             name,
+            user_name,
             contact_no,
             user_name,
             plain_password,
@@ -60,8 +62,9 @@ def create_user():
         return jsonify({
             "message": "User created successfully",
             "name": name,
-            "contact_no": contact_no,
             "user_name": user_name,
+            "contact_no": contact_no,
+            "email": user_name,
             "role": role,
             "age": age,
             "password": plain_password,
@@ -85,7 +88,7 @@ def get_users():
         # query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # base query
