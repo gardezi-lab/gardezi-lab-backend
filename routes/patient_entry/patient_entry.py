@@ -1,5 +1,5 @@
 import math
-from flask import Flask, request, jsonify, Blueprint, current_app
+from flask import Flask, request, jsonify, Blueprint, current_app, url_for,send_from_directory
 from MySQLdb.cursors import DictCursor
 from flask_mysqldb import MySQL    
 from datetime import datetime, timedelta
@@ -47,6 +47,7 @@ def create_patient_entry():
         pending_discount=0
         total_fee = data.get('total_fee', 0)
         paid = data.get('paid', 0)
+        payment_method = data.get('payment_method')
         test_list = data.get('test', [])
         print("Payload received:", data)
         
@@ -112,8 +113,8 @@ def create_patient_entry():
             patient_id = patient_id_posted
             print("Existing patient_id:", patient_id)
 
-        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by,company_id)VALUES(%s,%s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s ,%s)"""
-        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, pending_discount, user_id, reff_by,company_id))
+        insert_counter = """INSERT INTO counter(pt_id,sample, priority, remarks, paid, total_fee, discount, pending_discount, date_created, user_id, reff_by,company_id, payment_method)VALUES(%s,%s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s ,%s,%s)"""
+        cursor.execute(insert_counter,(patient_id, sample, priority, remarks, paid, total_fee, discount, pending_discount, user_id, reff_by,company_id,payment_method))
 
         counter_id = cursor.lastrowid
         print("counter_id", counter_id)
@@ -191,7 +192,326 @@ def create_patient_entry():
                 pass
         return jsonify({"error": str(e)}), 500
     
-    
+
+# ------------------- TODO Get All Patient Entries (Search + Pagination) ------------------ #
+@patient_entry_bp.route('/', methods=['GET'])
+@token_required
+def get_all_patient_entries():
+    import math, time
+    start_time = time.time()
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+        # 🔹 Filters
+        patient_name = request.args.get("patient_name", "", type=str)
+        mr_number = request.args.get("mr_number", "", type=str)
+        cell = request.args.get("cell", "", type=str)
+        from_date = request.args.get("from_date", "", type=str)
+        to_date = request.args.get("to_date", "", type=str)
+
+        # 🔹 Pagination
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
+        offset = (current_page - 1) * record_per_page
+
+        # 🔹 Build filters
+        filters = []
+        params = []
+
+        if patient_name:
+            filters.append("pt.patient_name LIKE %s")
+            params.append(f"%{patient_name}%")
+        if mr_number:
+            filters.append("pt.mr_number LIKE %s")
+            params.append(f"%{mr_number}%")
+        if cell:
+            filters.append("pt.cell LIKE %s")
+            params.append(f"%{cell}%")
+        if from_date and to_date:
+            filters.append("DATE(pt.created_at) BETWEEN %s AND %s")
+            params.extend([from_date, to_date])
+        elif from_date:
+            filters.append("DATE(pt.created_at) >= %s")
+            params.append(from_date)
+        elif to_date:
+            filters.append("DATE(pt.created_at) <= %s")
+            params.append(to_date)
+
+        # 🔹 Trash handling (show only trash=0)
+        filters.append("c.trash = 0")
+
+        # 🔹 Safe WHERE clause
+        if filters:
+            where_clause = "WHERE " + " AND ".join(filters)
+        else:
+            where_clause = ""
+        where_clause = where_clause.replace("WHERE AND", "WHERE").strip()
+
+        # 🔹 Main query
+        base_query = f"""
+            SELECT 
+                c.id AS cid,
+                c.pt_id AS patient_id,
+                c.payment_method,
+                c.total_fee, c.paid, c.discount, c.sample, c.priority, c.remarks, 
+                c.company_id, c.pending_discount, c.reff_by,
+                pt.cell, pt.patient_name, pt.father_hasband_MR, pt.age, pt.gender, 
+                pt.email, pt.package_id, pt.address, pt.MR_number, pt.created_at
+            FROM counter c
+            JOIN patient_entry pt ON c.pt_id = pt.id
+            {where_clause}
+        """
+
+        # 🔹 Count query
+        count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
+        cursor.execute(count_query, params)
+        total_records = cursor.fetchone()["total"]
+
+        # 🔹 Pagination query
+        paginated_query = base_query + " ORDER BY c.id DESC LIMIT %s OFFSET %s"
+        params_with_pagination = params + [record_per_page, offset]
+        cursor.execute(paginated_query, params_with_pagination)
+        patient_data_list = cursor.fetchall()
+
+        # 🔹 Fetch tests for each patient
+        for patient in patient_data_list:
+            cursor.execute("""
+                SELECT 
+                    pt.id AS patient_test_id, 
+                    tp.test_name,
+                    tp.delivery_time,
+                    tp.sample_required, 
+                    tp.fee
+                FROM patient_tests pt
+                JOIN test_profiles tp ON pt.test_id = tp.id
+                WHERE pt.patient_id = %s AND pt.counter_id = %s
+            """, (patient["patient_id"], patient["cid"]))
+            patient["tests"] = cursor.fetchall()
+
+        # 🔹 Prepare response
+        end_time = time.time()
+        total_pages = math.ceil(total_records / record_per_page)
+
+        return jsonify({
+            "patients": patient_data_list,
+            "totalRecords": total_records,
+            "totalPages": total_pages,
+            "currentPage": current_page,
+            "executionTime": end_time - start_time
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+# ------------------- TODO Get Patient Entry by ID ------------------ #
+
+@patient_entry_bp.route('/<int:id>', methods=['GET'])
+@token_required
+def patient_get_by_id(id):
+    try:
+        start_time = time.time()
+
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+
+        cursor.execute("""
+            SELECT 
+                c.id AS id,
+                c.reff_by,
+                c.pt_id AS patient_id,
+                c.total_fee, 
+                c.paid ,
+                c.discount ,
+                c.payment_method ,
+                c.sample ,
+                c.priority ,
+                c.remarks ,
+                c.company_id ,
+                pt.*
+            FROM counter c
+            JOIN patient_entry pt ON c.pt_id = pt.id
+            WHERE c.id = %s
+        """, (id,))
+        patient = cursor.fetchone()
+
+        if not patient:
+            cursor.close()
+            return jsonify({"error": "Patient entry not found"}), 404
+
+        
+        cursor.execute("""
+            SELECT 
+                pt.id AS patient_test_id,
+                pt.test_id AS test_id,
+                tp.test_name,
+                tp.sample_required,
+                tp.delivery_time,
+                tp.fee
+            FROM patient_tests pt
+            JOIN test_profiles tp ON pt.test_id = tp.id
+            WHERE pt.patient_id = %s AND counter_id= %s
+        """, (patient["patient_id"], patient["id"],))
+        tests = cursor.fetchall()
+
+        # Attach tests to patient info
+        patient["tests"] = tests
+
+        cursor.close()
+        end_time = time.time()
+        patient['execution_time']= end_time - start_time
+
+        
+        return jsonify([patient]), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ------------------- TODo Update Patient Entry by ID ------------------ #
+
+@patient_entry_bp.route('/<int:id>', methods=['PUT'])
+@token_required
+def update_patient_entry(id):
+    start_time = time.time()
+    try:
+        data = request.get_json()
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor(DictCursor)
+
+        
+        cursor.execute("SELECT pt_id FROM counter WHERE id = %s", (id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": "Invalid counter ID"}), 404
+
+        patient_id = result["pt_id"]
+
+        
+        cell = data.get('cell')
+        patient_name = data.get('patient_name')
+        father_hasband_MR = data.get('father_hasband_MR')
+        age = data.get('age')
+        gender = data.get('gender')
+        email = data.get('email')
+        address = data.get('address')
+        sample = data.get('sample')
+        priority = data.get('priority')
+        remarks = data.get('remarks')
+        discount = data.get('discount')
+        paid = data.get('paid')
+        total_fee = data.get('total_fee')
+        company_id = data.get('company_id')
+        package_id = data.get('package_id')
+        reff_by = data.get('reff_by')
+        user_id = data.get('user_id')
+        payment_method = data.get("payment_method")
+        tests = data.get('test', [])  
+        print("tests",tests)
+
+        
+        update_query = """
+            UPDATE patient_entry
+            SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, gender=%s,
+                email=%s, address=%s,
+                package_id=%s, user_id=%s
+            WHERE id=%s
+        """
+        cursor.execute(update_query, (
+            cell, patient_name, father_hasband_MR, age, gender, email, address,
+            package_id, user_id, patient_id  
+        ))
+
+        
+        counter_update = """
+            UPDATE counter 
+            SET total_fee=%s, paid=%s, discount=%s, remarks=%s, priority=%s, sample=%s , reff_by=%s,company_id=%s , payment_method=%s
+            WHERE pt_id=%s
+        """
+        cursor.execute(counter_update, (
+            total_fee, paid, discount, remarks, priority, sample, reff_by,company_id,payment_method, patient_id  
+        ))
+
+        
+        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s AND  counter_id = %s", (patient_id,id,))
+
+        inserted_tests_names = []
+        
+        for test in tests:
+            test_name = test.get('name')
+            delivery_time_hours = test.get('testDeliveryTime', 0)
+            delivery_datetime = datetime.now() + timedelta(hours=delivery_time_hours)
+            test_id = test.get('id')
+            print("Inserting test:", test_id)
+            cursor.execute("""
+                INSERT INTO patient_tests (patient_id, test_id, reporting_time,counter_id)
+                VALUES (%s, %s, %s, %s)
+            """, (patient_id, test_id, delivery_datetime, id,))
+            
+            inserted_tests_names.append(test_name)
+            comma_names = ",".join(inserted_tests_names)
+            
+        now_time = datetime.now()
+        pt_entry_log = f"Patient Updated: Tests: '{comma_names}', Amount: {total_fee}, Discount: {discount}, Paid: {paid}"
+        
+        cursor.execute(
+            "INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at) VALUES (%s, %s, %s, %s)",
+            (patient_id, id, pt_entry_log, now_time)
+        )
+
+        
+        mysql.connection.commit()
+        cursor.close()
+        end_time = time.time()
+
+
+        return jsonify({
+            "message": "Patient entry aur test_profiles dono update ho gaye",
+            "status": 200,
+            "execution_time": end_time - start_time
+
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ------------------- TODO Delete Patient Entry by ID ------------------ #
+
+@patient_entry_bp.route('/<int:id>', methods=['DELETE'])
+@token_required
+def delete_patient_entry(id):
+    start_time = time.time()
+
+    try:
+        mysql = current_app.mysql
+        cursor = mysql.connection.cursor()
+
+        id = int(id)
+        cursor.execute("SELECT pt_id FROM counter WHERE id = %s AND trash = 0", (id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({"message": "Counter record not found", "status": 404}), 404
+
+        patient_id = result[0]
+        
+        cursor.execute("UPDATE counter SET trash = 1 WHERE id = %s", (id,))
+        #cursor.execute("DELETE FROM patient_entry WHERE id = %s", (patient_id,))
+        mysql.connection.commit()
+        cursor.close()
+        end_time = time.time()
+
+
+        return jsonify({"message": "Patient entry deleted successfully", "status": 200,"execution_time": end_time - start_time
+}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 #------------------TODO patient cell check if exist-----------------
 
 @patient_entry_bp.route('/cell/<string:cell>', methods=['GET'])
@@ -215,13 +535,13 @@ def cell_patient_check(cell):
     if data:
         return jsonify({"data": data,"status": 200, "execution_time": end_time - start_time}), 200
     else:
-        return jsonify({"message": "No patient found for this cell", "status":404}), 404
+        return jsonify({"message": "No patient found for this cell", "status":404}), 200
 
 
 
 #-------------------- TODO GET selected test of patient by patient_id -----------------------
 
-@patient_entry_bp.route('/tests/<int:id>/', methods=['GET'])
+@patient_entry_bp.route('/selected_tests/<int:id>/', methods=['GET'])
 @token_required
 def get_patient_tests(id):
     start_time = time.time()
@@ -271,7 +591,7 @@ def get_patient_tests(id):
 
 #------------------ TODO GET patient selected tests parameter by patient_test_id ---
 
-@patient_entry_bp.route('/test_parameters/<int:test_id>/<int:patient_id>/<int:counter_id>/<string:test_type>', methods=['GET'])
+@patient_entry_bp.route('/selected_tests_parameters/<int:test_id>/<int:patient_id>/<int:counter_id>/<string:test_type>', methods=['GET'])
 @token_required
 def get_test_parameters(test_id, patient_id, counter_id, test_type): 
     start_time = time.time()
@@ -294,6 +614,7 @@ def get_test_parameters(test_id, patient_id, counter_id, test_type):
             WHERE patient_id = %s AND test_profile_id = %s AND counter_id = %s
         """, (patient_id, test_id, counter_id,))
         results = cursor.fetchall()
+        print("results", results)
         
         cursor.execute("""
             SELECT comment,status,result_status
@@ -465,7 +786,7 @@ def get_files_by(test_id):
         
 #---------------------TODO Add result of patient selected test parameters by patient_test_id----
 
-@patient_entry_bp.route('/test_results/<int:id>', methods=['POST'])
+@patient_entry_bp.route('/selected_test_results_add/<int:id>', methods=['POST'])
 @token_required
 def add_or_update_result(id):
     start_time = time.time()
@@ -646,322 +967,6 @@ def update_fee(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500        
 
-# ------------------- TODO Get All Patient Entries (Search + Pagination) ------------------ #
-@patient_entry_bp.route('/', methods=['GET'])
-@token_required
-def get_all_patient_entries():
-    import math, time
-    start_time = time.time()
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
-
-        # 🔹 Filters
-        patient_name = request.args.get("patient_name", "", type=str)
-        mr_number = request.args.get("mr_number", "", type=str)
-        cell = request.args.get("cell", "", type=str)
-        from_date = request.args.get("from_date", "", type=str)
-        to_date = request.args.get("to_date", "", type=str)
-
-        # 🔹 Pagination
-        current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
-        offset = (current_page - 1) * record_per_page
-
-        # 🔹 Build filters
-        filters = []
-        params = []
-
-        if patient_name:
-            filters.append("pt.patient_name LIKE %s")
-            params.append(f"%{patient_name}%")
-        if mr_number:
-            filters.append("pt.mr_number LIKE %s")
-            params.append(f"%{mr_number}%")
-        if cell:
-            filters.append("pt.cell LIKE %s")
-            params.append(f"%{cell}%")
-        if from_date and to_date:
-            filters.append("DATE(pt.created_at) BETWEEN %s AND %s")
-            params.extend([from_date, to_date])
-        elif from_date:
-            filters.append("DATE(pt.created_at) >= %s")
-            params.append(from_date)
-        elif to_date:
-            filters.append("DATE(pt.created_at) <= %s")
-            params.append(to_date)
-
-        # 🔹 Trash handling (show only trash=0)
-        filters.append("c.trash = 0")
-
-        # 🔹 Safe WHERE clause
-        if filters:
-            where_clause = "WHERE " + " AND ".join(filters)
-        else:
-            where_clause = ""
-        where_clause = where_clause.replace("WHERE AND", "WHERE").strip()
-
-        # 🔹 Main query
-        base_query = f"""
-            SELECT 
-                c.id AS cid,
-                c.pt_id AS patient_id,
-                c.total_fee, c.paid, c.discount, c.sample, c.priority, c.remarks, 
-                c.company_id, c.pending_discount, c.reff_by,
-                pt.cell, pt.patient_name, pt.father_hasband_MR, pt.age, pt.gender, 
-                pt.email, pt.package_id, pt.address, pt.MR_number, pt.created_at
-            FROM counter c
-            JOIN patient_entry pt ON c.pt_id = pt.id
-            {where_clause}
-        """
-
-        # 🔹 Count query
-        count_query = f"SELECT COUNT(*) AS total FROM ({base_query}) AS subquery"
-        cursor.execute(count_query, params)
-        total_records = cursor.fetchone()["total"]
-
-        # 🔹 Pagination query
-        paginated_query = base_query + " ORDER BY c.id DESC LIMIT %s OFFSET %s"
-        params_with_pagination = params + [record_per_page, offset]
-        cursor.execute(paginated_query, params_with_pagination)
-        patient_data_list = cursor.fetchall()
-
-        # 🔹 Fetch tests for each patient
-        for patient in patient_data_list:
-            cursor.execute("""
-                SELECT 
-                    pt.id AS patient_test_id, 
-                    tp.test_name,
-                    tp.delivery_time,
-                    tp.sample_required, 
-                    tp.fee
-                FROM patient_tests pt
-                JOIN test_profiles tp ON pt.test_id = tp.id
-                WHERE pt.patient_id = %s AND pt.counter_id = %s
-            """, (patient["patient_id"], patient["cid"]))
-            patient["tests"] = cursor.fetchall()
-
-        # 🔹 Prepare response
-        end_time = time.time()
-        total_pages = math.ceil(total_records / record_per_page)
-
-        return jsonify({
-            "patients": patient_data_list,
-            "totalRecords": total_records,
-            "totalPages": total_pages,
-            "currentPage": current_page,
-            "executionTime": end_time - start_time
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-
-# ------------------- TODO Get Patient Entry by ID ------------------ #
-
-@patient_entry_bp.route('/<int:id>', methods=['GET'])
-@token_required
-def patient_get_by_id(id):
-    try:
-        start_time = time.time()
-
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
-
-
-        cursor.execute("""
-            SELECT 
-                c.id AS id,
-                c.reff_by,
-                c.pt_id AS patient_id,
-                c.total_fee, 
-                c.paid ,
-                c.discount ,
-                c.sample ,
-                c.priority ,
-                c.remarks ,
-                c.company_id ,
-                pt.*
-            FROM counter c
-            JOIN patient_entry pt ON c.pt_id = pt.id
-            WHERE c.id = %s
-        """, (id,))
-        patient = cursor.fetchone()
-
-        if not patient:
-            cursor.close()
-            return jsonify({"error": "Patient entry not found"}), 404
-
-        
-        cursor.execute("""
-            SELECT 
-                pt.id AS patient_test_id,
-                pt.test_id AS test_id,
-                tp.test_name,
-                tp.sample_required,
-                tp.delivery_time,
-                tp.fee
-            FROM patient_tests pt
-            JOIN test_profiles tp ON pt.test_id = tp.id
-            WHERE pt.patient_id = %s AND counter_id= %s
-        """, (patient["patient_id"], patient["id"],))
-        tests = cursor.fetchall()
-
-        # Attach tests to patient info
-        patient["tests"] = tests
-
-        cursor.close()
-        end_time = time.time()
-        patient['execution_time']= end_time - start_time
-
-        
-        return jsonify([patient]), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ------------------- TODo Update Patient Entry by ID ------------------ #
-
-@patient_entry_bp.route('/<int:id>', methods=['PUT'])
-@token_required
-def update_patient_entry(id):
-    start_time = time.time()
-    try:
-        data = request.get_json()
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor(DictCursor)
-
-        
-        cursor.execute("SELECT pt_id FROM counter WHERE id = %s", (id,))
-        result = cursor.fetchone()
-        if not result:
-            return jsonify({"error": "Invalid counter ID"}), 404
-
-        patient_id = result["pt_id"]
-
-        
-        cell = data.get('cell')
-        patient_name = data.get('patient_name')
-        father_hasband_MR = data.get('father_hasband_MR')
-        age = data.get('age')
-        gender = data.get('gender')
-        email = data.get('email')
-        address = data.get('address')
-        sample = data.get('sample')
-        priority = data.get('priority')
-        remarks = data.get('remarks')
-        discount = data.get('discount')
-        paid = data.get('paid')
-        total_fee = data.get('total_fee')
-        company_id = data.get('company_id')
-        package_id = data.get('package_id')
-        reff_by = data.get('reff_by')
-        user_id = data.get('user_id')
-        tests = data.get('test', [])  
-        print("tests",tests)
-
-        
-        update_query = """
-            UPDATE patient_entry
-            SET cell=%s, patient_name=%s, father_hasband_MR=%s, age=%s, gender=%s,
-                email=%s, address=%s,
-                package_id=%s, user_id=%s
-            WHERE id=%s
-        """
-        cursor.execute(update_query, (
-            cell, patient_name, father_hasband_MR, age, gender, email, address,
-            package_id, user_id, patient_id  
-        ))
-
-        
-        counter_update = """
-            UPDATE counter 
-            SET total_fee=%s, paid=%s, discount=%s, remarks=%s, priority=%s, sample=%s , reff_by=%s,company_id=%s 
-            WHERE pt_id=%s
-        """
-        cursor.execute(counter_update, (
-            total_fee, paid, discount, remarks, priority, sample, reff_by,company_id, patient_id  
-        ))
-
-        
-        cursor.execute("DELETE FROM patient_tests WHERE patient_id = %s AND  counter_id = %s", (patient_id,id,))
-
-        inserted_tests_names = []
-        
-        for test in tests:
-            test_name = test.get('name')
-            delivery_time_hours = test.get('testDeliveryTime', 0)
-            delivery_datetime = datetime.now() + timedelta(hours=delivery_time_hours)
-            test_id = test.get('id')
-            print("Inserting test:", test_id)
-            cursor.execute("""
-                INSERT INTO patient_tests (patient_id, test_id, reporting_time,counter_id)
-                VALUES (%s, %s, %s, %s)
-            """, (patient_id, test_id, delivery_datetime, id,))
-            
-            inserted_tests_names.append(test_name)
-            comma_names = ",".join(inserted_tests_names)
-            
-        now_time = datetime.now()
-        pt_entry_log = f"Patient Updated: Tests: '{comma_names}', Amount: {total_fee}, Discount: {discount}, Paid: {paid}"
-        
-        cursor.execute(
-            "INSERT INTO patient_activity_log (patient_id, counter_id, activity, created_at) VALUES (%s, %s, %s, %s)",
-            (patient_id, id, pt_entry_log, now_time)
-        )
-
-        
-        mysql.connection.commit()
-        cursor.close()
-        end_time = time.time()
-
-
-        return jsonify({
-            "message": "Patient entry aur test_profiles dono update ho gaye",
-            "status": 200,
-            "execution_time": end_time - start_time
-
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ------------------- TODO Delete Patient Entry by ID ------------------ #
-
-@patient_entry_bp.route('/<int:id>', methods=['DELETE'])
-@token_required
-def delete_patient_entry(id):
-    start_time = time.time()
-
-    try:
-        mysql = current_app.mysql
-        cursor = mysql.connection.cursor()
-
-        id = int(id)
-        cursor.execute("SELECT pt_id FROM counter WHERE id = %s AND trash = 0", (id,))
-        result = cursor.fetchone()
-
-        if not result:
-            return jsonify({"message": "Counter record not found", "status": 404}), 404
-
-        patient_id = result[0]
-        
-        cursor.execute("UPDATE counter SET trash = 1 WHERE id = %s", (id,))
-        #cursor.execute("DELETE FROM patient_entry WHERE id = %s", (patient_id,))
-        mysql.connection.commit()
-        cursor.close()
-        end_time = time.time()
-
-
-        return jsonify({"message": "Patient entry deleted successfully", "status": 200,"execution_time": end_time - start_time
-}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 #-------------------------#TODO Test Verify ---------------------------------
 
 @patient_entry_bp.route('/verify_test/<int:test_id>', methods=['PUT'])
@@ -1092,3 +1097,109 @@ def delete_alldata_patient(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# --------file add krna patient k against----
+ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg"}
+
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+UPLOAD_FOLDER = 'uploads/patients'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+# ---------------- Upload File ----------------
+@patient_entry_bp.route('/upload_file/<int:counter_id>/<int:patient_id>', methods=['POST'])
+def upload_patient_file(counter_id, patient_id):
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files['file']
+    if file.filename == "":
+        return jsonify({"error": "Empty filename"}), 400
+
+    filename = file.filename  # or use secure_filename(file.filename)
+    upload_folder = os.path.join(UPLOAD_FOLDER, str(counter_id), str(patient_id))
+    os.makedirs(upload_folder, exist_ok=True)
+
+    file_path = os.path.join(upload_folder, filename)
+    file.save(file_path)
+
+    cursor = current_app.mysql.connection.cursor()
+    cursor.execute("""
+        UPDATE counter
+        SET patient_file = %s
+        WHERE id = %s AND pt_id = %s
+    """, (file_path, counter_id, patient_id))
+    current_app.mysql.connection.commit()
+
+    return jsonify({"status": "success", "file_path": file_path}), 201
+
+
+# ---------------- Serve File ----------------
+@patient_entry_bp.route('/patients/<int:counter_id>/<int:patient_id>/<filename>', methods=['GET'])
+def serve_patient_file(counter_id, patient_id, filename):
+    upload_folder = os.path.join(current_app.root_path, UPLOAD_FOLDER, str(counter_id), str(patient_id))
+    if not os.path.exists(os.path.join(upload_folder, filename)):
+        return jsonify({"error": "File not found"}), 404
+
+    return send_from_directory(upload_folder, filename)
+
+
+# ---------------- Get File URL ----------------
+@patient_entry_bp.route('/get_files/<int:counter_id>/<int:patient_id>', methods=['GET'])
+def get_patient_files(counter_id, patient_id):
+    cursor = current_app.mysql.connection.cursor(DictCursor)
+    cursor.execute("""
+        SELECT patient_file
+        FROM counter
+        WHERE id=%s AND pt_id=%s
+    """, (counter_id, patient_id))
+
+    record = cursor.fetchone()
+    if not record or not record["patient_file"]:
+        return jsonify({"error": "File not found"}), 404
+
+    filename = os.path.basename(record["patient_file"])
+
+    # Correct URL with blueprint prefix
+    file_url = url_for('patient_entry.serve_patient_file',
+                       counter_id=counter_id,
+                       patient_id=patient_id,
+                       filename=filename,
+                       _external=True)
+
+    # Optional: direct redirect to file (browser opens directly)
+    # return redirect(file_url)
+
+    return jsonify({"file_url": file_url}), 200
+
+
+# ---------------- Delete File ----------------
+@patient_entry_bp.route('/delete_file/<int:counter_id>/<int:patient_id>', methods=['DELETE'])
+def delete_patient_file(counter_id, patient_id):
+    cursor = current_app.mysql.connection.cursor(DictCursor)
+    cursor.execute("""
+        SELECT patient_file
+        FROM counter
+        WHERE id=%s AND pt_id=%s
+    """, (counter_id, patient_id))
+    record = cursor.fetchone()
+
+    if not record or not record["patient_file"]:
+        return jsonify({"error": "File not found"}), 404
+
+    file_path = record["patient_file"]
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    cursor.execute("""
+        UPDATE counter
+        SET patient_file = NULL
+        WHERE id=%s AND pt_id=%s
+    """, (counter_id, patient_id))
+    current_app.mysql.connection.commit()
+
+    return jsonify({"status": "file deleted"}), 200

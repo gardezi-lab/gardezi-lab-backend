@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, Blueprint, current_app
+from flask import Flask, request, jsonify, Blueprint, current_app, url_for
 from flask_mysqldb import MySQL
 import qrcode
 import base64
@@ -6,6 +6,7 @@ from io import BytesIO
 from datetime import datetime
 import MySQLdb.cursors
 import time
+import os
 from routes.authentication.authentication import token_required
 
 invoice_bp = Blueprint('invoice', __name__, url_prefix='/api/invoice')
@@ -90,7 +91,13 @@ def generate_invoice(id):
 
         # Step 4: Generate QR Code
         qr_text = f"Invoice for {patient['patient_name']} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        qr_img = qrcode.make(qr_text)
+        pdf_filename = f"invoice_{patient_id}_{int(time.time())}.pdf"
+        pdf_path = os.path.join("generated_reports", pdf_filename)
+# ... PDF generate karke save karen ...
+
+# PDF serve karne ka route
+        pdf_url = url_for('pdfreport.get_pdf', filename=pdf_filename, _external=True)
+        qr_img = qrcode.make(pdf_url)
         buffer = BytesIO()
         qr_img.save(buffer, format="PNG")
         qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
