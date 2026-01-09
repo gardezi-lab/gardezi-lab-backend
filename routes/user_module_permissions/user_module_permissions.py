@@ -10,16 +10,28 @@ permission_bp = Blueprint('permission', __name__, url_prefix='/api/permission')
 def get_all_permissions():
     start_time = time.time()
     try:
-        # Database connection
+        # Pagination (same style as you asked)
+        current_page = request.args.get("currentpage", 1, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
+        offset = (current_page - 1) * record_per_page
+
+        # DB connection
         conn = current_app.mysql.connection
         cursor = conn.cursor(DictCursor)
 
-        # Query
-        cursor.execute("SELECT * FROM user_module_permissions")
+        # Total records
+        cursor.execute("SELECT COUNT(*) AS total FROM user_module_permissions")
+        total_records = cursor.fetchone()["total"]
+
+        # Paginated data
+        cursor.execute("""
+            SELECT * FROM user_module_permissions
+            LIMIT %s OFFSET %s
+        """, (record_per_page, offset))
         data = cursor.fetchall()
         cursor.close()
-
-        # Simple formatted output
+        
+        # Format response
         result = []
         for row in data:
             result.append({
@@ -31,22 +43,28 @@ def get_all_permissions():
                     "pathologist": row["pathologist"],
                     "manager": row["manager"],
                     "doctor": row["doctor"],
-                    "patient": row["patient"],
-                    "accountant": row["accountant"]
+                    "accountant": row["accountant"],
+                    "collection_center": row["collection_center"]
                 }
             })
-            
+
         end_time = time.time()
-        execution_time = end_time - start_time
 
         return jsonify({
-            "module":result,
+            "modules": result,
+            "pagination": {
+                "current_page": current_page,
+                "record_per_page": record_per_page,
+                "total_records": total_records,
+                "total_pages": (total_records + record_per_page - 1) // record_per_page
+            },
             "status": 200,
-            "execution_time": execution_time
+            "execution_time": end_time - start_time
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 # ---------------- UPDATE PERMISSIONS BY USERID ---------------- #
 @permission_bp.route('/', methods=['PUT'])
 @token_required
@@ -74,6 +92,7 @@ def update_permissions():
             doctor = crud.get("doctor", 0)
             patient = crud.get("patient", 0)
             accountant = crud.get("accountant", 0)
+            collection_center = crud.get("collection_center", 0)
 
             cursor.execute("""
                 UPDATE user_module_permissions 
