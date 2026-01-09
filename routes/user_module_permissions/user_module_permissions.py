@@ -30,7 +30,7 @@ def get_all_permissions():
         """, (record_per_page, offset))
         data = cursor.fetchall()
         cursor.close()
-
+        
         # Format response
         result = []
         for row in data:
@@ -43,8 +43,8 @@ def get_all_permissions():
                     "pathologist": row["pathologist"],
                     "manager": row["manager"],
                     "doctor": row["doctor"],
-                    "patient": row["patient"],
-                    "accountant": row["accountant"]
+                    "accountant": row["accountant"],
+                    "collection_center": row["collection_center"]
                 }
             })
 
@@ -92,6 +92,7 @@ def update_permissions():
             doctor = crud.get("doctor", 0)
             patient = crud.get("patient", 0)
             accountant = crud.get("accountant", 0)
+            collection_center = crud.get("collection_center", 0)
 
             cursor.execute("""
                 UPDATE user_module_permissions 
