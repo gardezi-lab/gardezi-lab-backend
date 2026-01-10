@@ -3,7 +3,7 @@ from flask_mysqldb import MySQL
 from routes.authentication.authentication import token_required
 from MySQLdb.cursors import DictCursor
 import MySQLdb
-import time
+import time, re
 import math
 
 collectioncenter_bp = Blueprint('collectioncenter', __name__, url_prefix='/api/collectioncenter')
@@ -20,7 +20,7 @@ def get_collection_centers():
         # Params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
 
         offset = (current_page - 1) * record_per_page
 
@@ -70,7 +70,9 @@ def get_collection_centers():
     finally:
         cursor.close()
 
-
+def is_valid_email(email):
+    pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+    return re.match(pattern, email)
 # ----------------------------------Add collection center-----------------------------
 @collectioncenter_bp.route('/', methods=['POST'])
 @token_required
@@ -82,6 +84,19 @@ def add_collection_center():
     email = data.get('email')
     password = data.get('password')
     location = data.get('location')
+    
+    # validation of required fields
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+
+    # Email format validation
+    if not is_valid_email(email):
+        return jsonify({"error": "Invalid email format"}), 400
+    
     
     try:
         mysql = current_app.mysql

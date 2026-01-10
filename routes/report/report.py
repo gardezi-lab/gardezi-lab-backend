@@ -108,14 +108,14 @@ def generate_report(id):
             
             verified_by_name = ""
             verified_by_qualification = ""
-            if verified_by_id:
+            # if verified_by_id:
             #first ham check kr rhe hen k es test me koi interpertation add he. agar add he to uski id
-                cursor.execute("SELECT name, qualification FROM users WHERE id = %s", (verified_by_id,)) 
-                resulttest = cursor.fetchone()
-                verified_by_name = resulttest['name']
-                print("verified by name", verified_by_name)
-                print("finding line error 1021s")
-                verified_by_qualification = resulttest['qualification']
+            cursor.execute("SELECT name, qualification FROM users WHERE id = %s", (verified_by_id,)) 
+            resulttest = cursor.fetchone()
+            verified_by_name = resulttest['name']
+            print("verified by name", verified_by_name)
+            print("finding line error 1021s")
+            verified_by_qualification = resulttest['qualification']
             
             cursor.execute("SELECT interpretation FROM test_profiles WHERE id = %s", (test_id,)) 
             resultinter = cursor.fetchone()

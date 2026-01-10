@@ -69,7 +69,7 @@ def get_packages():
         # 🔹 query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         filters = ["trash = 0"]  # 🔹 always show non-trash records

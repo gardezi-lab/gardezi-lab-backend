@@ -20,7 +20,7 @@ def get_departments_optimized():
 
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         sql = "SELECT SQL_CALC_FOUND_ROWS id, department_name FROM departments WHERE trash = 0"
@@ -80,7 +80,7 @@ def create_department():
             return jsonify({"error": "Department name cannot be empty"}), 400
         # Check for duplicate department
         cursor = mysql.connection.cursor() # type: ignore
-        cursor.execute("SELECT * FROM departments WHERE department=%s", (department_name,))
+        cursor.execute("SELECT * FROM departments WHERE department_name=%s", (department_name,))
         existing_department = cursor.fetchone()
         if existing_department:
             return jsonify({"error": "Department already exists"}), 400

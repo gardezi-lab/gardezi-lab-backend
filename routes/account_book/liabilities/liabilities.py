@@ -16,7 +16,7 @@ def get_all_account_heads():
         # ---------------- Query Params ---------------- #
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # ---------------- Base WHERE ---------------- #
@@ -49,8 +49,9 @@ def get_all_account_heads():
         data_values = values + [record_per_page, offset]
         cursor.execute(data_query, data_values)
         data = cursor.fetchall()
+        end_time = time.time()
 
-        execution_time = time.time() - start_time
+        execution_time = end_time - start_time
         total_pages = math.ceil(total_records / record_per_page) if record_per_page else 1
 
         return jsonify({
@@ -62,10 +63,8 @@ def get_all_account_heads():
         }), 200
 
     except Exception as e:
-        execution_time = time.time() - start_time
         return jsonify({
             "error": str(e),
-            "execution_time": execution_time
         }), 500
 
     finally:

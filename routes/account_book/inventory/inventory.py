@@ -16,7 +16,7 @@ def get_all_inventory():
         # ---------------- Query Params ---------------- #
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # ---------------- Base Query ---------------- #
@@ -58,7 +58,8 @@ def get_all_inventory():
 
         # ---------------- Pagination ---------------- #
         total_pages = math.ceil(total_records / record_per_page) if record_per_page else 1
-        execution_time = time.time() - start_time
+        end_time = time.time()
+        execution_time = end_time - start_time
 
         return jsonify({
             "message": "All inventory items fetched successfully",

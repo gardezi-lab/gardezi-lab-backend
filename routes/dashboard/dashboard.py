@@ -31,15 +31,15 @@ def counter_report():
                 ORDER BY created_at
             """
             params = (from_date, to_date)
-        
-        # 🔹 CASE 2: Default last 7 days
+
+        # 🔹 CASE 2: Date filter NA ho → default last 7 days
         else:
             query = """
                 SELECT 
                     DATE(created_at) AS created_at,
                     SUM(total_fee) AS total_fee
                 FROM counter
-                WHERE DATE(created_at) >= CURDATE() - INTERVAL 7 DAY
+                WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 GROUP BY DATE(created_at)
                 ORDER BY created_at
             """
@@ -48,13 +48,14 @@ def counter_report():
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-        # 🔹 Convert total_fee to float
+        # 🔹 total_fee float me convert
         for row in rows:
-            row['total_fee'] = float(row['total_fee']) if row['total_fee'] is not None else 0
+            row['total_fee'] = float(row['total_fee']) if row['total_fee'] else 0
 
         end_time = time.time()
 
         return jsonify({
+            "status": "success",
             "data": rows,
             "execution_time": round(end_time - start_time, 4)
         })
@@ -64,9 +65,11 @@ def counter_report():
             "status": "error",
             "message": str(e)
         }), 500
+
     finally:
         if cursor:
             cursor.close()
+
 
 # ------------------------TODO Reception Report ------------
 @dashboard_bp.route('/cc_report', methods=['GET'])
@@ -81,7 +84,7 @@ def cc_sale_report():
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-        # 🔹 CASE 1: Date filter (date-wise per CC)
+        # 🔹 CASE 1: Date filter diya ho (date-wise per CC)
         if from_date and to_date:
             query = """
                 SELECT 
@@ -97,7 +100,7 @@ def cc_sale_report():
             """
             params = (from_date, to_date)
 
-        # 🔹 CASE 2: Default last 7 days (total per CC)
+        # 🔹 CASE 2: Date filter NA ho → default last 7 days
         else:
             query = """
                 SELECT 
@@ -106,7 +109,7 @@ def cc_sale_report():
                     SUM(c.total_fee) AS total_sale
                 FROM counter c
                 JOIN collectioncenter cc ON cc.id = c.cc
-                WHERE DATE(c.created_at) >= CURDATE() - INTERVAL 7 DAY
+                WHERE c.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
                 GROUP BY c.cc
                 ORDER BY total_sale DESC
             """
@@ -115,13 +118,14 @@ def cc_sale_report():
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-        # 🔹 Convert total_sale to float
+        # 🔹 total_sale float me convert
         for row in rows:
-            row['total_sale'] = float(row['total_sale']) if row['total_sale'] is not None else 0
+            row['total_sale'] = float(row['total_sale']) if row['total_sale'] else 0
 
         end_time = time.time()
 
         return jsonify({
+            "status": "success",
             "data": rows,
             "execution_time": round(end_time - start_time, 4)
         })
@@ -131,6 +135,7 @@ def cc_sale_report():
             "status": "error",
             "message": str(e)
         }), 500
+
     finally:
         if cursor:
             cursor.close()

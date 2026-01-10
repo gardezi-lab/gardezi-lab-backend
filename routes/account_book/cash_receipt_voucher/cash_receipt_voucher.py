@@ -118,7 +118,7 @@ def get_all_cash_receipt_vouchers():
         # ---------------- Query Params ---------------- #
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # ---------------- Base WHERE Clause ---------------- #

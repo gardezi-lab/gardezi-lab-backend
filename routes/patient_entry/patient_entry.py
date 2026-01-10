@@ -1111,6 +1111,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ---------------- Upload File ----------------
 @patient_entry_bp.route('/upload_file/<int:counter_id>/<int:patient_id>', methods=['POST'])
+@token_required
 def upload_patient_file(counter_id, patient_id):
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -1149,6 +1150,7 @@ def serve_patient_file(counter_id, patient_id, filename):
 
 # ---------------- Get File URL ----------------
 @patient_entry_bp.route('/get_files/<int:counter_id>/<int:patient_id>', methods=['GET'])
+@token_required
 def get_patient_files(counter_id, patient_id):
     cursor = current_app.mysql.connection.cursor(DictCursor)
     cursor.execute("""
@@ -1165,10 +1167,10 @@ def get_patient_files(counter_id, patient_id):
 
     # Correct URL with blueprint prefix
     file_url = url_for('patient_entry.serve_patient_file',
-                       counter_id=counter_id,
-                       patient_id=patient_id,
-                       filename=filename,
-                       _external=True)
+                    counter_id=counter_id,
+                    patient_id=patient_id,
+                    filename=filename,
+                    _external=True)
 
     # Optional: direct redirect to file (browser opens directly)
     # return redirect(file_url)
@@ -1178,6 +1180,7 @@ def get_patient_files(counter_id, patient_id):
 
 # ---------------- Delete File ----------------
 @patient_entry_bp.route('/delete_file/<int:counter_id>/<int:patient_id>', methods=['DELETE'])
+@token_required
 def delete_patient_file(counter_id, patient_id):
     cursor = current_app.mysql.connection.cursor(DictCursor)
     cursor.execute("""
