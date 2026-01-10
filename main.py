@@ -57,7 +57,8 @@ UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Set secret key from .env
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-app.config['TOKEN_EXPIRY_HOURS'] = int(os.getenv("TOKEN_EXPIRY_HOURS", 2))  # default 2 hours
+# app.config['TOKEN_EXPIRY_MINUTES'] = int(os.getenv("TOKEN_EXPIRY_MINUTES", 10))  # default 10 minutes
+
 
 #  Blacklist set
 app.blacklisted_tokens = set()

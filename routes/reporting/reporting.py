@@ -20,7 +20,7 @@ def get_receptionists_by_date(center_id):
         from_date = request.args.get('from_date')
         to_date = request.args.get('to_date')
         current_page = request.args.get('currentpage', 1, type=int)
-        record_per_page = request.args.get('recordperpage', 10, type=int)
+        record_per_page = request.args.get('recordperpage', 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         if not from_date or not to_date:
@@ -57,7 +57,7 @@ def get_receptionists_by_date(center_id):
             LEFT JOIN test_profiles tp ON tp.id = t.test_id
             LEFT JOIN users r ON r.id = c.reff_by
             WHERE u.role = 'Reception' AND u.id = %s
-              AND c.created_at BETWEEN %s AND %s
+            AND c.created_at BETWEEN %s AND %s
             GROUP BY c.id
             ORDER BY u.id DESC, c.id DESC
             LIMIT %s OFFSET %s
@@ -73,7 +73,7 @@ def get_receptionists_by_date(center_id):
             FROM users u
             LEFT JOIN counter c ON c.user_id = u.id
             WHERE u.role = 'Reception' AND u.id = %s
-              AND c.created_at BETWEEN %s AND %s
+            AND c.created_at BETWEEN %s AND %s
         """
         cursor.execute(count_query, [center_id, from_date, to_date])
         total_records = cursor.fetchone()['total']
@@ -105,7 +105,7 @@ def get_doctors_by_date(doctor_id):
         from_date = request.args.get('from_date')
         to_date = request.args.get('to_date')
         current_page = request.args.get('currentpage', 1, type=int)
-        record_per_page = request.args.get('recordperpage', 10, type=int)
+        record_per_page = request.args.get('recordperpage', 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         if not from_date or not to_date:
@@ -214,7 +214,7 @@ def get_receptionists_by_cc(cc_id):
 
         # 🔹 Pagination params
         current_page = request.args.get('currentpage', 1, type=int)
-        record_per_page = request.args.get('recordperpage', 10, type=int)
+        record_per_page = request.args.get('recordperpage', 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # Step 1: Get Receptionists
@@ -330,7 +330,7 @@ def technician_report(technician_id):
         from_date = request.args.get('from_date')
         to_date = request.args.get('to_date')
         current_page = request.args.get('currentpage', 1, type=int)
-        record_per_page = request.args.get('recordperpage', 10, type=int)
+        record_per_page = request.args.get('recordperpage', 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         mysql = current_app.mysql
@@ -495,7 +495,7 @@ def discount_report():
     from_date = request.args.get('from_date')
     to_date = request.args.get('to_date')
     current_page = request.args.get('currentpage', 1, type=int)
-    record_per_page = request.args.get('recordperpage', 10, type=int)
+    record_per_page = request.args.get('recordperpage', 30, type=int)
     offset = (current_page - 1) * record_per_page
 
     query = "SELECT * FROM counter WHERE discount > 0"
@@ -542,7 +542,7 @@ def simple_patient_list():
     start_time = time.time()
 
     current_page = request.args.get('currentpage', 1, type=int)
-    record_per_page = request.args.get('recordperpage', 10, type=int)
+    record_per_page = request.args.get('recordperpage', 30, type=int)
     offset = (current_page - 1) * record_per_page
 
     mysql = current_app.mysql
@@ -620,4 +620,49 @@ def get_activity():
 })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+# ---------------Sale report --------------
+@reporting_bp.route('/sales_statement_report', methods=['GET'])
+@token_required
+def get_sales_report():
+    start_time = time.time()
+
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+
+    if not from_date or not to_date:
+        return jsonify({
+            "error": "Both 'from_date' and 'to_date' are required (YYYY-MM-DD)"
+        }), 400
+
+    mysql = current_app.mysql
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    query = """
+        SELECT 
+            DATE(c.created_at) AS sale_date,
+            c.total_fee,
+            c.discount,
+            c.total_fee - paid AS payment_recoveries,
+            cc.id AS cc,
+            cc.name AS collection_center_name,
+            SUM(c.paid) AS payment_received
+        FROM counter c
+        LEFT JOIN collectioncenter cc 
+            ON c.cc = cc.id
+        WHERE DATE(c.created_at) BETWEEN %s AND %s
+          AND c.trash = 0
+        GROUP BY DATE(c.created_at), cc.id, cc.name
+        ORDER BY sale_date ASC
+    """
+
+    cursor.execute(query, (from_date, to_date))
+    data = cursor.fetchall()
+    cursor.close()
+
+    end_time = time.time()
+
+    return jsonify({
+        "data": data,
+        "status": 200,
+        "execution_time": end_time - start_time
+    }), 200

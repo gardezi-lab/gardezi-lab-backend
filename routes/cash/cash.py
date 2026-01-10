@@ -22,7 +22,7 @@ def get_data_cash():
         to_date = request.args.get("to_date", "", type=str)
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
 
         offset = (current_page - 1) * record_per_page
 

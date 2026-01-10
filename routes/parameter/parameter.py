@@ -24,7 +24,7 @@ def get_all_parameters():
         # Query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
 
         offset = (current_page - 1) * record_per_page
 
@@ -123,6 +123,11 @@ def create_parameter(test_profile_id):
         default_value = data.get("default_value")
         dropdown_value = data.get("dropdown_values")
         
+        # VALIDATIONS
+        if not parameter_name:
+            return jsonify({"error": "parameter_name is required"}), 400
+        if not input_type:
+            return jsonify({"error": "input_type is required"}), 400
         
 
         # Check if test_profile_id exists

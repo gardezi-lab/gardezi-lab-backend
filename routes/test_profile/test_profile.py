@@ -24,7 +24,7 @@ def get_all_test_profiles():
         # query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # base query
@@ -48,7 +48,7 @@ def get_all_test_profiles():
         total_records = cur.fetchone()["total"]
 
         # pagination
-        base_query += " ORDER BY id ASC LIMIT %s OFFSET %s"  # 🔹 ASC for ascending
+        base_query += " ORDER BY id DESC LIMIT %s OFFSET %s"  # 🔹 ASC for ascending
         values.extend([record_per_page, offset])
         cur.execute(base_query, values)
         test_profiles = cur.fetchall()
@@ -90,7 +90,7 @@ def get_test_profile(test_profile_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # ----------------------get test name and id ---------------------#
-@test_profile_bp.route('/test_names', methods=['GET'])
+@test_profile_bp.route('/get_tests', methods=['GET'])
 @token_required
 def get_test_names():
     start_time = time.time()
@@ -128,7 +128,6 @@ def create_test_profile():
 
         test_code = data.get("test_code")
         sample_required = data.get("sample_required")
-        select_header = data.get("select_header")
         delivery_time = data.get("delivery_time")
         interpretation = data.get("interpretation")
 
@@ -153,14 +152,8 @@ def create_test_profile():
 
         if data.get("serology_elisa") is None:
             return jsonify({"error": "Field 'serology_elisa' is required"}), 400
-        if data.get("unit_ref_range") is None:
-            return jsonify({"error": "Field 'unit_ref_range' is required"}), 400
-        if data.get("test_formate") is None:
-            return jsonify({"error": "Field 'test_formate' is required"}), 400
-
+    
         serology_elisa = data.get("serology_elisa")
-        unit_ref_range = to_bool(data.get("unit_ref_range"))
-        test_formate = to_bool(data.get("test_formate"))
 
         # --- Check if department_id is valid ---
         mysql = current_app.mysql
@@ -173,13 +166,13 @@ def create_test_profile():
         # --- Insert into test_profiles ---
         insert_query = """
             INSERT INTO test_profiles 
-            (test_name, test_code, sample_required, select_header, fee, delivery_time,
-            serology_elisa, interpretation, unit_ref_range, test_formate, department_id) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (test_name, test_code, sample_required, fee, delivery_time,
+            serology_elisa, interpretation, department_id) 
+            VALUES (%s, %s, %s, %s, %s,  %s, %s, %s)
         """
         cursor.execute(insert_query, (
-            test_name, test_code, sample_required, select_header, fee, delivery_time,
-            serology_elisa, interpretation, unit_ref_range, test_formate, department_id
+            test_name, test_code, sample_required, fee, delivery_time,
+            serology_elisa, interpretation, department_id
         ))
         mysql.connection.commit()
         cursor.close()
@@ -250,13 +243,12 @@ def update_test_profile(test_profile_id):
         test_name = data.get("test_name")
         test_code = data.get("test_code")
         sample_required = data.get("sample_required")
-        select_header = data.get("select_header")
         fee = data.get("fee")
         delivery_time = data.get("delivery_time")
         serology_elisa = data.get("serology_elisa")
         interpretation = data.get("interpretation")
 
-        if not all(isinstance(f, str) for f in [test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation]):
+        if not all(isinstance(f, str) for f in [test_name, test_code, sample_required, fee, delivery_time, serology_elisa, interpretation]):
             return jsonify({"error": "All fields must be strings"}), 400
 
         mysql = current_app.mysql
@@ -268,11 +260,11 @@ def update_test_profile(test_profile_id):
 
         update_query = """
             UPDATE test_profiles 
-            SET test_name = %s, test_code = %s, sample_required = %s, select_header = %s, fee = %s, delivery_time = %s, serology_elisa = %s, interpretation = %s 
+            SET test_name = %s, test_code = %s, sample_required = %s, fee = %s, delivery_time = %s, serology_elisa = %s, interpretation = %s 
             WHERE id = %s
         """
-        cursor.execute(update_query, (test_name, test_code, sample_required, select_header, fee, delivery_time, serology_elisa, interpretation, test_profile_id))
-        mysql.connection.commit()
+        cursor.execute(update_query, (test_name, test_code, sample_required, fee, delivery_time, serology_elisa, interpretation, test_profile_id))
+        mysql.connection.commit()  
         cursor.close()
         end_time = time.time()
 
@@ -418,7 +410,7 @@ def get_delayed_tests():
                 "status": 404,
                 "message": "No delayed tests found.",
                 "execution_time": end_time - start_time
-            }), 404
+            }), 200
 
         return jsonify({
             "status": 200,

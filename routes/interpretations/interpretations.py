@@ -18,6 +18,8 @@ def validate_interpretation_data(data, is_update=False):
             errors.append("code is required")
         if not data.get("heading"):
             errors.append("heading is required")
+        if not data.get("detail"):
+            errors.append("detail is required")
     return errors if errors else None
 
 
@@ -61,7 +63,7 @@ def get_interpretations():
         # Query params
         search = request.args.get("search", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
 
         offset = (current_page - 1) * record_per_page
 

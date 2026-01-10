@@ -87,8 +87,6 @@ def create_journal_voucher():
         }), 201
 
     except Exception as e:
-        end_time = time.time()
-        execution_time = end_time - start_time
         return jsonify({"error": str(e), "execution_time": execution_time}), 500
 
 
@@ -105,7 +103,7 @@ def get_all_journal_vouchers():
         voucher_type = request.args.get('voucher_type', None)
         search = request.args.get('search', "", type=str)
         current_page = request.args.get('currentpage', 1, type=int)
-        record_per_page = request.args.get('recordperpage', 10, type=int)
+        record_per_page = request.args.get('recordperpage', 30, type=int)
         offset = (current_page - 1) * record_per_page
 
         # ---------------- Base Query ---------------- #
@@ -478,7 +476,6 @@ def print_voucher_pdf(id):
 @voucher_bp.route('/ledger', methods=['GET'])
 @token_required
 def get_ledger_report():
-   
     try:
         mysql = current_app.mysql
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)

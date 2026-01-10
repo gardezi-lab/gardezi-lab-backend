@@ -25,7 +25,7 @@ def get_companies_panels():
         from_date = request.args.get("from_date", "", type=str)
         to_date = request.args.get("to_date", "", type=str)
         current_page = request.args.get("currentpage", 1, type=int)
-        record_per_page = request.args.get("recordperpage", 10, type=int)
+        record_per_page = request.args.get("recordperpage", 30, type=int)
 
         offset = (current_page - 1) * record_per_page
 
@@ -99,6 +99,17 @@ def create_companies_panel():
     contact_no = data.get('contact_no')
     user_name = data.get('user_name')
     age = data.get('age')
+    
+    # validation of required fields
+    if not company_name:
+        return jsonify({"error": "Company_Name is required"}), 400
+    if not head_name:
+        return jsonify({"error": "head_name is required"}), 400
+    if not contact_no:
+        return jsonify({"error": "contact_no is required"}), 400
+    if len(contact_no) not in [11, 13]:
+        return jsonify({"error": "Invalid contact_no length"}), 400
+
 
 
     try:
@@ -249,7 +260,7 @@ def get_companies_panel_by_id(id):
             if patient:
                 patient['total_fee'] = total_fee
                 patients.append(patient)
-            end_time = time.time()
+        end_time = time.time()
 
             
 
