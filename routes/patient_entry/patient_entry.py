@@ -1110,9 +1110,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 # ---------------- Upload File ----------------
-@patient_entry_bp.route('/upload_file/<int:counter_id>/<int:patient_id>', methods=['POST'])
+@patient_entry_bp.route('/upload_file/<int:patient_id>', methods=['POST'])
 @token_required
-def upload_patient_file(counter_id, patient_id):
+def upload_patient_file(patient_id):
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
@@ -1121,7 +1121,7 @@ def upload_patient_file(counter_id, patient_id):
         return jsonify({"error": "Empty filename"}), 400
 
     filename = file.filename  # or use secure_filename(file.filename)
-    upload_folder = os.path.join(UPLOAD_FOLDER, str(counter_id), str(patient_id))
+    upload_folder = os.path.join(UPLOAD_FOLDER, str(patient_id))
     os.makedirs(upload_folder, exist_ok=True)
 
     file_path = os.path.join(upload_folder, filename)
@@ -1129,19 +1129,18 @@ def upload_patient_file(counter_id, patient_id):
 
     cursor = current_app.mysql.connection.cursor()
     cursor.execute("""
-        UPDATE counter
-        SET patient_file = %s
-        WHERE id = %s AND pt_id = %s
-    """, (file_path, counter_id, patient_id))
+        INSERT INTO patient_file (file, pt_id)
+        VALUES (%s, %s)
+    """, (file_path, patient_id))
     current_app.mysql.connection.commit()
 
-    return jsonify({"status": "success", "file_path": file_path}), 201
+    return jsonify({"status": "success", "file_path": file_path,"pt_id": patient_id, "id": cursor.lastrowid}), 201
 
 
 # ---------------- Serve File ----------------
-@patient_entry_bp.route('/patients/<int:counter_id>/<int:patient_id>/<filename>', methods=['GET'])
-def serve_patient_file(counter_id, patient_id, filename):
-    upload_folder = os.path.join(current_app.root_path, UPLOAD_FOLDER, str(counter_id), str(patient_id))
+@patient_entry_bp.route('/patients/<int:patient_id>/<filename>', methods=['GET'])
+def serve_patient_file(patient_id, filename):
+    upload_folder = os.path.join(current_app.root_path, UPLOAD_FOLDER, str(patient_id))
     if not os.path.exists(os.path.join(upload_folder, filename)):
         return jsonify({"error": "File not found"}), 404
 
@@ -1149,33 +1148,47 @@ def serve_patient_file(counter_id, patient_id, filename):
 
 
 # ---------------- Get File URL ----------------
-@patient_entry_bp.route('/get_files/<int:counter_id>/<int:patient_id>', methods=['GET'])
+@patient_entry_bp.route('/get_files/<int:patient_id>', methods=['GET'])
 @token_required
-def get_patient_files(counter_id, patient_id):
+def get_patient_files(patient_id):
     cursor = current_app.mysql.connection.cursor(DictCursor)
+
     cursor.execute("""
-        SELECT patient_file
-        FROM counter
-        WHERE id=%s AND pt_id=%s
-    """, (counter_id, patient_id))
+        SELECT id, file
+        FROM patient_file
+        WHERE pt_id = %s AND trash = 0
+    """, (patient_id,))
 
-    record = cursor.fetchone()
-    if not record or not record["patient_file"]:
-        return jsonify({"error": "File not found"}), 404
+    records = cursor.fetchall()
 
-    filename = os.path.basename(record["patient_file"])
+    if not records:
+        return jsonify({"error": "No files found for this patient"}), 404
 
-    # Correct URL with blueprint prefix
-    file_url = url_for('patient_entry.serve_patient_file',
-                    counter_id=counter_id,
-                    patient_id=patient_id,
-                    filename=filename,
-                    _external=True)
+    files = []
 
-    # Optional: direct redirect to file (browser opens directly)
-    # return redirect(file_url)
+    for row in records:
+        if row["file"]:
+            filename = os.path.basename(row["file"])
 
-    return jsonify({"file_url": file_url}), 200
+            file_url = url_for(
+                'patient_entry.serve_patient_file',
+                patient_id=patient_id,
+                filename=filename,
+                _external=True
+            )
+
+            files.append({
+                "file_id": row["id"],      # 👈 file ka apna ID
+                "filename": filename,
+                "file_url": file_url
+            })
+
+    return jsonify({
+        "patient_id": patient_id,
+        "total_files": len(files),
+        "files": files
+    }), 200
+
 
 
 # ---------------- Delete File ----------------
@@ -1184,23 +1197,23 @@ def get_patient_files(counter_id, patient_id):
 def delete_patient_file(counter_id, patient_id):
     cursor = current_app.mysql.connection.cursor(DictCursor)
     cursor.execute("""
-        SELECT patient_file
-        FROM counter
+        SELECT file
+        FROM patient_file
         WHERE id=%s AND pt_id=%s
     """, (counter_id, patient_id))
     record = cursor.fetchone()
 
-    if not record or not record["patient_file"]:
+    if not record or not record["file"]:
         return jsonify({"error": "File not found"}), 404
 
-    file_path = record["patient_file"]
+    file_path = record["file"]
 
     if os.path.exists(file_path):
         os.remove(file_path)
 
     cursor.execute("""
-        UPDATE counter
-        SET patient_file = NULL
+        UPDATE patient_file
+        SET trash = 1
         WHERE id=%s AND pt_id=%s
     """, (counter_id, patient_id))
     current_app.mysql.connection.commit()
